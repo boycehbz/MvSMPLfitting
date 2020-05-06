@@ -1,19 +1,3 @@
-# -*- coding: utf-8 -*-
-
-# Max-Planck-Gesellschaft zur Förderung der Wissenschaften e.V. (MPG) is
-# holder of all proprietary rights on this computer program.
-# You can only use this computer program if you have closed
-# a license agreement with MPG or you get the right to use the computer
-# program from someone who is authorized to grant you that right.
-# Any use of the computer program without a valid license is prohibited and
-# liable to prosecution.
-#
-# Copyright©2019 Max-Planck-Gesellschaft zur Förderung
-# der Wissenschaften e.V. (MPG). acting on behalf of its Max Planck Institute
-# for Intelligent Systems and the Max Planck Institute for Biological
-# Cybernetics. All rights reserved.
-#
-# Contact: ps-license@tuebingen.mpg.de
 
 from __future__ import absolute_import
 from __future__ import print_function
@@ -43,66 +27,7 @@ from optimizers import optim_factory
 
 from utils import fitting
 
-
-# from hbz_modules import vposer_decoder, project_joint
-
 def non_linear_solver(
-                    # img,
-                    #  img_path,
-                    #  fn,
-                    #  keypoints,
-                    #  joints3d,
-                    #  body_model,
-                    #  camera,
-                    #  joint_weights,
-                    #  body_pose_prior,
-                    #  jaw_prior,
-                    #  left_hand_prior,
-                    #  right_hand_prior,
-                    #  shape_prior,
-                    #  expr_prior,
-                    #  angle_prior,
-                    #  result_fn='out.pkl',
-                    #  mesh_fn='out.obj',
-                    #  out_img_fn='overlay.png',
-                    #  
-                    #  
-                    # #  init_joints_idxs=(12, 11, 6, 5),
-                    #  init_joints_idxs=(9, 12, 2, 5),
-                    #  use_face=True,
-                    #  use_hands=True,
-
-                    #  jaw_pose_prior_weights=None,
-                    #  expr_weights=None,
-                    #  hand_joints_weights=None,
-                    #  face_joints_weights=None,
-                    #  depth_loss_weight=1e2,
-                    #  
-                    #  
-                    #  df_cone_height=0.5,
-                    #  penalize_outside=True,
-                    #  max_collisions=8,
-                    #  point2plane=False,
-                    #  part_segm_fn='',
-                    #  focal_length=5000.,
-                    #  side_view_thsh=25.,
-                    #  
-                    #  vposer_latent_dim=32,
-                    #  vposer_ckpt='',
-                    #  
-                    #  
-                    #  
-                    #  save_meshes=True,
-                    #  degrees=None,
-                     
-                    #  dtype=torch.float32,
-                    #  ign_part_pairs=None,
-                    #  left_shoulder_idx=2,
-                    #  right_shoulder_idx=5,
-                    #  init=None,
-                    #  seq_begin=False,
-                    #  
-                    #  use_hip=True,
                     setting,
                     data,
                     batch_size=1,

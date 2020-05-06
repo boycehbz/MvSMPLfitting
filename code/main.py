@@ -51,22 +51,7 @@ def main(**args):
 
 if __name__ == "__main__":
 
-    sys.argv = ["", "--config=cfg_files\\fit_smpl.yaml", # config file
-    # "--cam_param=data\\3DOH50K_Parameters.txt", # camera parameters
-    # "--data_folder=data",
-    # "--output_folder=output", 
-    # "--visualize=False",
-    # "--model_folder=models",
-    # "--vposer_ckpt=VPoser\\vposer_v1_0",
-    # "--interpenetration=False",
-    # "--gender=neutral_lsp",
-    # "--dataset=alphapose",
-    # "--use_3d=False",
-    # "--save_meshes=True",
-    # "--is_seq=True",
-    # "--use_hip=True",
-    # "--use_vposer=True",
-    #"--body_prior_type=gmm" # must be gmm if use_vposer is False
+    sys.argv = ["", "--config=cfg_files\\fit_smpl.yaml"
     ] 
     args = parse_config()
     main(**args)
