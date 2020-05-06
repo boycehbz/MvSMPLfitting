@@ -133,7 +133,7 @@ def vertices2landmarks(vertices, faces, lmk_faces_idx, lmk_bary_coords):
 
 
 def lbs(betas, pose, v_template, shapedirs, posedirs, J_regressor, parents,
-        lbs_weights, pose2rot=True, dtype=torch.float32):
+        lbs_weights, scale, pose2rot=True, dtype=torch.float32):
     ''' Performs Linear Blend Skinning with the given shape and pose parameters
 
         Parameters
@@ -177,7 +177,7 @@ def lbs(betas, pose, v_template, shapedirs, posedirs, J_regressor, parents,
 
     # Add shape contribution
     v_shaped = v_template + blend_shapes(betas, shapedirs)
-
+    v_shaped *= scale
     # Get the joints
     # NxJx3 array
     J = vertices2joints(J_regressor, v_shaped)

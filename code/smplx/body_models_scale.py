@@ -381,14 +381,15 @@ class SMPL(nn.Module):
             num_repeats = int(self.batch_size / betas.shape[0])
             betas = betas.expand(num_repeats, -1)
 
-        if apply_scale:
-            # joints = joints * scale
-            vertices = self.v_template * scale
+        if not apply_scale:
+            scale = torch.ones([batch_size, 1],
+                                             dtype=dtype,
+                                             requires_grad=False)
             
-        vertices, joints = lbs(betas, full_pose, vertices,
+        vertices, joints = lbs(betas, full_pose, self.v_template,
                                self.shapedirs, self.posedirs,
                                self.J_regressor, self.parents,
-                               self.lbs_weights, dtype=self.dtype)
+                               self.lbs_weights, scale, dtype=self.dtype)
 
         if self.model_type == 'smpllsp':
             joints = torch.matmul(self.joint_regressor, vertices)

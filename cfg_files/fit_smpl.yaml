@@ -57,7 +57,7 @@ coll_loss_weights:
     
 # optimization related
 rho: 100
-optim_type: 'lbfgsls'
+optim_type: 'lbfgsls' #lbfgsls
 ftol: 1e-9
 gtol: 1e-9
 lr: 1.0

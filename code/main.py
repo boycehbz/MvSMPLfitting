@@ -36,7 +36,7 @@ def main(**args):
         print('Processing: {}'.format(data['img_path']))
 
         # init guess
-        init_guess(setting, data, **args)
+        init_guess(setting, data, use_torso=True, **args)
         # linear solve
         print("linear solve, to do...")
         # non-linear solve

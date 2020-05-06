@@ -273,9 +273,6 @@ def non_linear_solver(
             final_loss_val))
 
         # Get the result of the fitting process
-        # Store in it the errors list in order to compare multiple
-        # orientations, if they exist
-
         result = {key: val.detach().cpu().numpy()
                         for key, val in model.named_parameters()}
         result['loss'] = final_loss_val
