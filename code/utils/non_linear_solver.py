@@ -1,0 +1,358 @@
+# -*- coding: utf-8 -*-
+
+# Max-Planck-Gesellschaft zur Förderung der Wissenschaften e.V. (MPG) is
+# holder of all proprietary rights on this computer program.
+# You can only use this computer program if you have closed
+# a license agreement with MPG or you get the right to use the computer
+# program from someone who is authorized to grant you that right.
+# Any use of the computer program without a valid license is prohibited and
+# liable to prosecution.
+#
+# Copyright©2019 Max-Planck-Gesellschaft zur Förderung
+# der Wissenschaften e.V. (MPG). acting on behalf of its Max Planck Institute
+# for Intelligent Systems and the Max Planck Institute for Biological
+# Cybernetics. All rights reserved.
+#
+# Contact: ps-license@tuebingen.mpg.de
+
+from __future__ import absolute_import
+from __future__ import print_function
+from __future__ import division
+
+
+import time
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
+
+import sys
+import os
+
+import numpy as np
+import torch
+
+from tqdm import tqdm
+
+from collections import defaultdict
+
+import cv2
+import PIL.Image as pil_img
+
+from optimizers import optim_factory
+
+from utils import fitting
+
+
+# from hbz_modules import vposer_decoder, project_joint
+
+def non_linear_solver(
+                    # img,
+                    #  img_path,
+                    #  fn,
+                    #  keypoints,
+                    #  joints3d,
+                    #  body_model,
+                    #  camera,
+                    #  joint_weights,
+                    #  body_pose_prior,
+                    #  jaw_prior,
+                    #  left_hand_prior,
+                    #  right_hand_prior,
+                    #  shape_prior,
+                    #  expr_prior,
+                    #  angle_prior,
+                    #  result_fn='out.pkl',
+                    #  mesh_fn='out.obj',
+                    #  out_img_fn='overlay.png',
+                    #  
+                    #  
+                    # #  init_joints_idxs=(12, 11, 6, 5),
+                    #  init_joints_idxs=(9, 12, 2, 5),
+                    #  use_face=True,
+                    #  use_hands=True,
+
+                    #  jaw_pose_prior_weights=None,
+                    #  expr_weights=None,
+                    #  hand_joints_weights=None,
+                    #  face_joints_weights=None,
+                    #  depth_loss_weight=1e2,
+                    #  
+                    #  
+                    #  df_cone_height=0.5,
+                    #  penalize_outside=True,
+                    #  max_collisions=8,
+                    #  point2plane=False,
+                    #  part_segm_fn='',
+                    #  focal_length=5000.,
+                    #  side_view_thsh=25.,
+                    #  
+                    #  vposer_latent_dim=32,
+                    #  vposer_ckpt='',
+                    #  
+                    #  
+                    #  
+                    #  save_meshes=True,
+                    #  degrees=None,
+                     
+                    #  dtype=torch.float32,
+                    #  ign_part_pairs=None,
+                    #  left_shoulder_idx=2,
+                    #  right_shoulder_idx=5,
+                    #  init=None,
+                    #  seq_begin=False,
+                    #  
+                    #  use_hip=True,
+                    setting,
+                    data,
+                    batch_size=1,
+                    data_weights=None,
+                    body_pose_prior_weights=None,
+                    shape_weights=None,
+                    coll_loss_weights=None,
+                    use_joints_conf=False,
+                    use_3d=False,
+                    rho=100,
+                    interpenetration=False,
+                    loss_type='smplify',
+                    visualize=False,
+                    use_vposer=True,
+                    interactive=True,
+                    use_cuda=True,
+                    **kwargs):
+    assert batch_size == 1, 'PyTorch L-BFGS only supports batch_size == 1'
+
+    views = setting['views']
+    device = setting['device']
+    dtype = setting['dtype']
+    vposer = setting['vposer']
+    keypoints = data['keypoints']
+    joint_weights = setting['joints_weight']
+    model = setting['model']
+    camera = setting['camera']
+
+    assert (len(data_weights) ==
+            len(body_pose_prior_weights) and len(shape_weights) ==
+            len(body_pose_prior_weights) and len(coll_loss_weights) ==
+            len(body_pose_prior_weights)), "Number of weight must match"
+    
+    # if not seq_begin and kwargs.get("is_seq"):
+    #     for i in range(3):
+    #         body_pose_prior_weights[i] = body_pose_prior_weights[3]*2
+    #         shape_weights[i] = shape_weights[3]*2
+
+    # load vposer
+    pose_embedding = None
+    if vposer is not None:
+        # initial pose, to do...
+        pose_embedding = torch.zeros([batch_size, 32],
+                                     dtype=dtype, device=device,
+                                     requires_grad=True)
+        #pose_embedding = init['init_pose'].clone().detach().cuda().requires_grad_(True)
+
+    # initial pose, to do...
+    # body_mean_pose = init['init_pose']
+    
+    # process keypoints
+    keypoint_data = torch.tensor(keypoints, dtype=dtype)
+    gt_joints = keypoint_data[:, :, :, :2]
+    if use_joints_conf:
+        joints_conf = []
+        for v in keypoint_data:
+            conf = v[:, :, 2].reshape(1, -1)
+            conf = conf.to(device=device, dtype=dtype)
+            joints_conf.append(conf)
+
+    if use_3d:
+        joints_data = torch.tensor(joints3d, dtype=dtype)
+        gt_joints3d = joints_data[:, :3]
+        if use_joints_conf:
+            joints3d_conf = joints_data[:, 3].reshape(1, -1).to(device=device, dtype=dtype)
+            if not use_hip:
+                joints3d_conf[0][11] = 0
+                joints3d_conf[0][12] = 0
+
+        gt_joints3d = gt_joints3d.to(device=device, dtype=dtype)
+    else:
+        gt_joints3d = None
+        joints3d_conf = None
+    # Transfer the data to the correct device
+    gt_joints = gt_joints.to(device=device, dtype=dtype)
+
+    # Create the search tree
+    search_tree = None
+    pen_distance = None
+    filter_faces = None
+    # we do not use this term at this time
+    if interpenetration:
+        from mesh_intersection.bvh_search_tree import BVH
+        import mesh_intersection.loss as collisions_loss
+        from mesh_intersection.filter_faces import FilterFaces
+
+        assert use_cuda, 'Interpenetration term can only be used with CUDA'
+        assert torch.cuda.is_available(), \
+            'No CUDA Device! Interpenetration term can only be used' + \
+            ' with CUDA'
+
+        search_tree = BVH(max_collisions=max_collisions)
+
+        pen_distance = \
+            collisions_loss.DistanceFieldPenetrationLoss(
+                sigma=df_cone_height, point2plane=point2plane,
+                vectorized=True, penalize_outside=penalize_outside)
+
+        if part_segm_fn:
+            # Read the part segmentation
+            part_segm_fn = os.path.expandvars(part_segm_fn)
+            with open(part_segm_fn, 'rb') as faces_parents_file:
+                face_segm_data = pickle.load(faces_parents_file,
+                                             encoding='latin1')
+            faces_segm = face_segm_data['segm']
+            faces_parents = face_segm_data['parents']
+            # Create the module used to filter invalid collision pairs
+            filter_faces = FilterFaces(
+                faces_segm=faces_segm, faces_parents=faces_parents,
+                ign_part_pairs=ign_part_pairs).to(device=device)
+
+    # Weights used for the pose prior and the shape prior
+    opt_weights_dict = {'data_weight': data_weights,
+                        'body_pose_weight': body_pose_prior_weights,
+                        'shape_weight': shape_weights}
+    if interpenetration:
+        opt_weights_dict['coll_loss_weight'] = coll_loss_weights
+
+    # get weights for each stage
+    keys = opt_weights_dict.keys()
+    opt_weights = [dict(zip(keys, vals)) for vals in
+                   zip(*(opt_weights_dict[k] for k in keys
+                         if opt_weights_dict[k] is not None))]
+    for weight_list in opt_weights:
+        for key in weight_list:
+            weight_list[key] = torch.tensor(weight_list[key],
+                                            device=device,
+                                            dtype=dtype)
+
+    # create fitting loss
+    loss = fitting.create_loss(loss_type=loss_type,
+                               joint_weights=joint_weights,
+                               rho=rho,
+                               use_joints_conf=use_joints_conf,
+                               vposer=vposer,
+                               pose_embedding=pose_embedding,
+                               body_pose_prior=setting['body_pose_prior'],
+                               shape_prior=setting['shape_prior'],
+                               angle_prior=setting['angle_prior'],
+                               interpenetration=interpenetration,
+                               pen_distance=pen_distance,
+                               search_tree=search_tree,
+                               tri_filtering_module=filter_faces,
+                               dtype=dtype,
+                               use_3d=use_3d,
+                               **kwargs)
+    loss = loss.to(device=device)
+
+    monitor = fitting.FittingMonitor(
+            batch_size=batch_size, visualize=visualize, **kwargs)
+    # with fitting.FittingMonitor(
+    #         batch_size=batch_size, visualize=visualize, **kwargs) as monitor:
+
+    H, W, _ = data['img'][0].shape
+
+    data_weight = 500 / H
+
+    # Reset the parameters to estimate the initial translation of the
+    # body model
+    # body_model.reset_params(body_pose=body_mean_pose, transl=init['init_t'], global_orient=init['init_r'], scale=init['init_s'], betas=init['init_betas'])
+
+    # we do not change rotation in multi-view task
+    orientations = [model.global_orient]
+
+    # store here the final error for both orientations,
+    # and pick the orientation resulting in the lowest error
+    results = []
+
+    # Step 1: Optimize the full model
+    final_loss_val = 0
+    opt_start = time.time()
+
+    # initial value for non-linear solve
+    new_params = defaultdict(global_orient=model.global_orient,
+                                # body_pose=body_mean_pose,
+                                transl=model.transl,
+                                scale=model.scale,
+                                betas=model.betas,
+                                )
+    if vposer is not None:
+        with torch.no_grad():
+            pose_embedding.fill_(0)
+    model.reset_params(**new_params)
+
+    for opt_idx, curr_weights in enumerate(tqdm(opt_weights, desc='Stage')):
+
+        body_params = list(model.parameters())
+
+        final_params = list(
+            filter(lambda x: x.requires_grad, body_params))
+
+        if vposer is not None:
+            final_params.append(pose_embedding)
+
+        body_optimizer, body_create_graph = optim_factory.create_optimizer(
+            final_params,
+            **kwargs)
+        body_optimizer.zero_grad()
+
+        curr_weights['data_weight'] = data_weight
+        curr_weights['bending_prior_weight'] = (
+            3.17 * curr_weights['body_pose_weight'])
+        loss.reset_loss_weights(curr_weights)
+
+        closure = monitor.create_fitting_closure(
+            body_optimizer, model,
+            camera=camera, gt_joints=gt_joints,
+            joints_conf=joints_conf,
+            gt_joints3d=gt_joints3d,
+            joints3d_conf=joints3d_conf,
+            joint_weights=joint_weights,
+            loss=loss, create_graph=body_create_graph,
+            use_vposer=use_vposer, vposer=vposer,
+            pose_embedding=pose_embedding,
+            return_verts=True, return_full_pose=True, use_3d=use_3d)
+
+        if interactive:
+            if use_cuda and torch.cuda.is_available():
+                torch.cuda.synchronize()
+            stage_start = time.time()
+        final_loss_val = monitor.run_fitting(
+            body_optimizer,
+            closure, final_params,
+            model,
+            pose_embedding=pose_embedding, vposer=vposer,
+            use_vposer=use_vposer)
+
+        if interactive:
+            if use_cuda and torch.cuda.is_available():
+                torch.cuda.synchronize()
+            elapsed = time.time() - stage_start
+            if interactive:
+                tqdm.write('Stage {:03d} done after {:.4f} seconds'.format(
+                    opt_idx, elapsed))
+
+    if interactive:
+        if use_cuda and torch.cuda.is_available():
+            torch.cuda.synchronize()
+        elapsed = time.time() - opt_start
+        tqdm.write(
+            'Body fitting done after {:.4f} seconds'.format(elapsed))
+        tqdm.write('Body final loss val = {:.5f}'.format(
+            final_loss_val))
+
+        # Get the result of the fitting process
+        # Store in it the errors list in order to compare multiple
+        # orientations, if they exist
+
+        result = {key: val.detach().cpu().numpy()
+                        for key, val in model.named_parameters()}
+        result['loss'] = final_loss_val
+        result['pose_embedding'] = pose_embedding
+    return result
