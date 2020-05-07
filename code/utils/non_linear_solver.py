@@ -30,6 +30,7 @@ from utils import fitting
 def non_linear_solver(
                     setting,
                     data,
+                    seq_start,
                     batch_size=1,
                     data_weights=None,
                     body_pose_prior_weights=None,
@@ -44,6 +45,7 @@ def non_linear_solver(
                     use_vposer=True,
                     interactive=True,
                     use_cuda=True,
+                    is_seq=False,
                     **kwargs):
     assert batch_size == 1, 'PyTorch L-BFGS only supports batch_size == 1'
 
@@ -55,28 +57,12 @@ def non_linear_solver(
     joint_weights = setting['joints_weight']
     model = setting['model']
     camera = setting['camera']
+    pose_embedding = setting['pose_embedding']
 
     assert (len(data_weights) ==
             len(body_pose_prior_weights) and len(shape_weights) ==
             len(body_pose_prior_weights) and len(coll_loss_weights) ==
             len(body_pose_prior_weights)), "Number of weight must match"
-    
-    # if not seq_begin and kwargs.get("is_seq"):
-    #     for i in range(3):
-    #         body_pose_prior_weights[i] = body_pose_prior_weights[3]*2
-    #         shape_weights[i] = shape_weights[3]*2
-
-    # load vposer
-    pose_embedding = None
-    if vposer is not None:
-        # initial pose, to do...
-        pose_embedding = torch.zeros([batch_size, 32],
-                                     dtype=dtype, device=device,
-                                     requires_grad=True)
-        #pose_embedding = init['init_pose'].clone().detach().cuda().requires_grad_(True)
-
-    # initial pose, to do...
-    # body_mean_pose = init['init_pose']
     
     # process keypoints
     keypoint_data = torch.tensor(keypoints, dtype=dtype)
@@ -200,19 +186,25 @@ def non_linear_solver(
     final_loss_val = 0
     opt_start = time.time()
 
-    # initial value for non-linear solve
-    new_params = defaultdict(global_orient=model.global_orient,
-                                # body_pose=body_mean_pose,
-                                transl=model.transl,
-                                scale=model.scale,
-                                betas=model.betas,
-                                )
-    if vposer is not None:
-        with torch.no_grad():
-            pose_embedding.fill_(0)
-    model.reset_params(**new_params)
+    # # initial value for non-linear solve
+    # new_params = defaultdict(global_orient=model.global_orient,
+    #                             # body_pose=body_mean_pose,
+    #                             transl=model.transl,
+    #                             scale=model.scale,
+    #                             betas=model.betas,
+    #                             )
+    # if vposer is not None:
+    #     with torch.no_grad():
+    #         pose_embedding.fill_(0)
+    # model.reset_params(**new_params)
 
     for opt_idx, curr_weights in enumerate(tqdm(opt_weights, desc='Stage')):
+        # pass stage1 and stage2 if it is a sequence
+        if not seq_start and is_seq:
+            if opt_idx < 2:
+                continue
+            elif opt_idx == 2:
+                curr_weights['body_pose_weight'] *= 0.15
 
         body_params = list(model.parameters())
 

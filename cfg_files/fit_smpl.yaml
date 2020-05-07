@@ -4,6 +4,7 @@ data_folder: "data"
 cam_param: "data/3DOH50K_Parameters.txt"
 use_joints_conf: true
 interpenetration: false
+is_seq: true
 
 # output related
 output_folder: 'output'

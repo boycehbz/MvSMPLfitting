@@ -149,16 +149,21 @@ def init(**kwarg):
 
     # load vposer
     vposer = None
+    pose_embedding = None
+    batch_size = 1
     if kwarg.get('use_vposer'):
         vposer_ckpt = osp.expandvars(kwarg.get('prior_folder'))
         vposer = load_vposer(vposer_ckpt, vp_model='snapshot')
         vposer = vposer.to(device=device)
         vposer.eval()
+        pose_embedding = torch.zeros([batch_size, 32],
+                                     dtype=dtype, device=device,
+                                     requires_grad=True)
 
     # return setting
     setting['use_3d'] = kwarg.pop("use_3d")
-    setting['extris'] = extris
-    setting['intris'] = intris
+    setting['extrinsics'] = extris
+    setting['intrinsics'] = intris
     setting['model'] = model
     setting['dtype'] = dtype
     setting['device'] = device
@@ -167,10 +172,11 @@ def init(**kwarg):
     setting['body_pose_prior'] = body_pose_prior
     setting['shape_prior'] = shape_prior
     setting['angle_prior'] = angle_prior
-    setting['camera'] = camera
+    setting['cameras'] = camera
     setting['img_folder'] = out_img_folder
     setting['result_folder'] = result_folder
     setting['mesh_folder'] = mesh_folder
-
+    setting['pose_embedding'] = pose_embedding
+    setting['batch_size'] = batch_size
     return dataset_obj, setting
 

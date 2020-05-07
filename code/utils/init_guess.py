@@ -2,11 +2,14 @@ from utils.recompute3D import recompute3D
 import torch
 from utils.umeyama import umeyama
 import cv2
+from collections import defaultdict
 
 def init_guess(setting, data, use_torso=False, **kwargs):
     model = setting['model']
     dtype = setting['dtype']
     keypoints = data['keypoints']
+    batch_size = setting['batch_size']
+    device = setting['device']
     joints3d = recompute3D(setting['extris'], setting['intris'], keypoints)
 
     if kwargs.get('model_type') == 'smpllsp':
@@ -31,6 +34,17 @@ def init_guess(setting, data, use_torso=False, **kwargs):
     init_r = torch.tensor(rot, dtype=dtype).reshape(1,3)
     model.reset_params(transl=init_t, global_orient=init_r, scale=init_s)
 
+    if kwargs.get('use_vposer'):
+        with torch.no_grad():   
+            setting['pose_embedding'].fill_(0)
+
+    # # load fixed parameters
+    # init_s = torch.tensor(100., dtype=dtype)
+    # init_shape = torch.tensor([2.39806, 0.678491, -1.38193, -0.966748, -1.29383,-0.795755, -0.303195, -1.1032, -0.197056, -0.102728 ], dtype=dtype)
+    # model.reset_params(betas=init_shape, scale=init_s)
+    # model.betas.requires_grad = False
+    # model.scale.requires_grad = False
+
     # # visualize
     # init_pose = torch.zeros((1,69), dtype=dtype).cuda()
     # model_output = model(return_verts=True, return_full_pose=True, body_pose=init_pose)
@@ -40,4 +54,44 @@ def init_guess(setting, data, use_torso=False, **kwargs):
     # from test_code.projection import joint_projection, surface_projection
     # for i in range(6):
     #     joint_projection(joints3d, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], True)
+    #     surface_projection(verts, model.faces, joints, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], 0)
+
+
+def load_init(setting, data, results, use_torso=False, **kwargs):
+    model = setting['model']
+    dtype = setting['dtype']
+    device = setting['device']
+    # if the loss of last frame is too large, we use init_guess to get initial value
+    if results['loss'] > 5000:
+        init_guess(setting, data, use_torso=use_torso, **kwargs)
+
+    init_t = torch.tensor(results['transl'], dtype=dtype)
+    init_r = torch.tensor(results['global_orient'], dtype=dtype)
+    init_s = torch.tensor(results['scale'], dtype=dtype)
+    init_shape = torch.tensor(results['betas'], dtype=dtype)
+    if kwargs.get('use_vposer'):
+        setting['pose_embedding'] = torch.tensor(results['pose_embedding'], dtype=dtype, device=device, requires_grad=True)
+    else:
+        # gmm prior, to do...
+        pass
+        #init_pose = torch.tensor(results['body_pose'], dtype=dtype)
+
+    # initial value
+    new_params = defaultdict(global_orient=init_r,
+                                # body_pose=body_mean_pose,
+                                transl=init_t,
+                                scale=init_s,
+                                betas=init_shape,
+                                )
+    model.reset_params(**new_params)
+
+    # # visualize
+    # init_pose = torch.tensor(results['body_pose'], dtype=dtype).cuda()
+    # model_output = model(return_verts=True, return_full_pose=True, body_pose=init_pose)
+    # joints = model_output.joints.detach().cpu().numpy()[0]
+    # verts = model_output.vertices.detach().cpu().numpy()[0]
+    # import numpy as np
+    # from test_code.projection import joint_projection, surface_projection
+    # for i in range(6):
+    #     # joint_projection(joints3d, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], True)
     #     surface_projection(verts, model.faces, joints, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], 0)

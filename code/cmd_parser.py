@@ -38,6 +38,10 @@ def parse_config(argv=None):
                         default=False,
                         type=lambda x: x.lower() in ['true', '1'],
                         help='Whether to use the interpenetration term')
+    parser.add_argument('--is_seq',
+                        default=False,
+                        type=lambda x: x.lower() in ['true', '1'],
+                        help='Init model using result of last frame')   
     # output related
     parser.add_argument('--output_folder',
                         default='output',
@@ -314,10 +318,7 @@ def parse_config(argv=None):
     #                     default=False,
     #                     type=lambda x: x.lower() in ['true', '1'],
     #                     help='Use 3d joint ground-truth for fitting')
-    # parser.add_argument('--is_seq',
-    #                     default=False,
-    #                     type=lambda x: x.lower() in ['true', '1'],
-    #                     help='Init model using result of last frame')          
+       
     # parser.add_argument('--use_hip',
     #                     default=False,
     #                     type=lambda x: x.lower() in ['true', '1'],

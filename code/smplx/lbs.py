@@ -177,7 +177,7 @@ def lbs(betas, pose, v_template, shapedirs, posedirs, J_regressor, parents,
 
     # Add shape contribution
     v_shaped = v_template + blend_shapes(betas, shapedirs)
-    v_shaped *= scale
+    # v_shaped *= scale
     # Get the joints
     # NxJx3 array
     J = vertices2joints(J_regressor, v_shaped)
@@ -202,7 +202,7 @@ def lbs(betas, pose, v_template, shapedirs, posedirs, J_regressor, parents,
 
     v_posed = pose_offsets + v_shaped
     # 4. Get the global joint location
-    J_transformed, A = batch_rigid_transform(rot_mats, J, parents, dtype=dtype)
+    J_transformed, A = batch_rigid_transform(rot_mats, J, parents, scale, dtype=dtype)
 
     # 5. Do skinning:
     # W is N x V x (J + 1)
@@ -313,7 +313,7 @@ def transform_mat(R, t):
                       F.pad(t, [0, 0, 0, 1], value=1)], dim=2)
 
 
-def batch_rigid_transform(rot_mats, joints, parents, dtype=torch.float32):
+def batch_rigid_transform(rot_mats, joints, parents, scale, dtype=torch.float32):
     """
     Applies a batch of rigid transformations to the joints
 
@@ -345,7 +345,7 @@ def batch_rigid_transform(rot_mats, joints, parents, dtype=torch.float32):
         rot_mats.view(-1, 3, 3),
         rel_joints.view(-1, 3, 1)).view(-1, joints.shape[1], 4, 4)
 
-    # transforms_mat[:, 0][:,:3,:3] *= 7.06
+    transforms_mat[:, 0][:,:3,:3] *= scale
     transform_chain = [transforms_mat[:, 0]]
     for i in range(1, parents.shape[0]):
         # Subtract the joint location at the rest pose

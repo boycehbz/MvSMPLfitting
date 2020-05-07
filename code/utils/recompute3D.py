@@ -14,6 +14,7 @@ def fill_nMat(n):
 def recompute3D(extris, intris, keypoints):
 
     assert len(extris) == len(intris) and len(extris) == len(keypoints)
+
     # homegeneous
     keypoints = np.concatenate(keypoints, axis=0)
     joint_conf = keypoints[:,:,2].copy()
