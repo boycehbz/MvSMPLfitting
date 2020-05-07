@@ -30,7 +30,6 @@ from utils import fitting
 def non_linear_solver(
                     setting,
                     data,
-                    seq_start,
                     batch_size=1,
                     data_weights=None,
                     body_pose_prior_weights=None,
@@ -58,6 +57,7 @@ def non_linear_solver(
     model = setting['model']
     camera = setting['camera']
     pose_embedding = setting['pose_embedding']
+    seq_start = setting['seq_start']
 
     assert (len(data_weights) ==
             len(body_pose_prior_weights) and len(shape_weights) ==

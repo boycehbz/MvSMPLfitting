@@ -64,6 +64,8 @@ def load_init(setting, data, results, use_torso=False, **kwargs):
     # if the loss of last frame is too large, we use init_guess to get initial value
     if results['loss'] > 5000:
         init_guess(setting, data, use_torso=use_torso, **kwargs)
+        setting['seq_start'] = True
+        return
 
     init_t = torch.tensor(results['transl'], dtype=dtype)
     init_r = torch.tensor(results['global_orient'], dtype=dtype)
@@ -95,3 +97,15 @@ def load_init(setting, data, results, use_torso=False, **kwargs):
     # for i in range(6):
     #     # joint_projection(joints3d, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], True)
     #     surface_projection(verts, model.faces, joints, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], 0)
+
+def fix_params(setting, scale=None):
+    dtype = setting['dtype']
+    model = setting['model']
+    init_t = model.transl
+    init_r = model.global_orient
+    init_s = model.scale
+    if scale is not None:
+        init_s = torch.tensor(scale, dtype=dtype)
+        model.scale.requires_grad = False
+    model.reset_params(transl=init_t, global_orient=init_r, scale=init_s)
+        
