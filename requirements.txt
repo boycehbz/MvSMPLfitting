@@ -1,0 +1,11 @@
+# platform: win-64
+configargparse==1.2.3
+pyyaml
+opencv-python
+tqdm
+pyopengl
+pyopengl-accelerate
+scipy
+torchgeometry
+configer
+trimesh
