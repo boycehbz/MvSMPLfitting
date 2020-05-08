@@ -141,9 +141,23 @@ def parse_config(argv=None):
                         nargs='*',
                         help='The weight for the collision term')
 
-
-    # parser.add_argument('--loss_type', default='smplify', type=str,
-    #                     help='The type of loss to use')
+    # fixed parameters
+    parser.add_argument('--shape',
+                        default=[0.0, 0.0, 0.0, 2.0], type=float,
+                        nargs='*',
+                        help='The fixed shape parameter')
+    parser.add_argument('--scale',
+                        default=[1.], type=float,
+                        nargs='*',
+                        help='The fixed scale parameter')
+    parser.add_argument('--fix_scale',
+                        type=lambda arg: arg.lower() == 'true',
+                        default=False,
+                        help='Use 3D annotation for the computations')
+    parser.add_argument('--fix_shape',
+                        type=lambda arg: arg.lower() == 'true',
+                        default=False,
+                        help='Use 3D annotation for the computations')
 
 
     # parser.add_argument('--same_person',

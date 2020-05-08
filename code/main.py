@@ -65,7 +65,7 @@ def main(**args):
         else:
             load_init(setting, data, results, use_torso=True, **args)
 
-        fix_params(setting, scale=100)
+        fix_params(setting, scale=setting['fixed_scale'], shape=setting['fixed_shape'])
         # linear solve
         print("linear solve, to do...")
         # non-linear solve

@@ -3,6 +3,7 @@ import os.path as osp
 import yaml
 import torch
 import sys
+import numpy as np
 from utils.data_parser import create_dataset
 from utils.utils import JointMapper, load_camera_para, get_rot_trans
 import smplx
@@ -159,6 +160,16 @@ def init(**kwarg):
         pose_embedding = torch.zeros([batch_size, 32],
                                      dtype=dtype, device=device,
                                      requires_grad=True)
+
+    # process fixed parameters
+    if kwarg.get('fix_scale'):
+        setting['fixed_scale'] = np.array(kwarg.get('scale'))
+    else:
+        setting['fixed_scale'] = None
+    if kwarg.get('fix_shape'):
+        setting['fixed_shape'] = np.array(kwarg.get('shape'))
+    else:
+        setting['fixed_shape'] = None
 
     # return setting
     setting['use_3d'] = kwarg.pop("use_3d")

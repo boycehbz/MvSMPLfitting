@@ -98,14 +98,18 @@ def load_init(setting, data, results, use_torso=False, **kwargs):
     #     # joint_projection(joints3d, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], True)
     #     surface_projection(verts, model.faces, joints, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], 0)
 
-def fix_params(setting, scale=None):
+def fix_params(setting, scale=None, shape=None):
     dtype = setting['dtype']
     model = setting['model']
     init_t = model.transl
     init_r = model.global_orient
     init_s = model.scale
+    init_shape = model.betas
     if scale is not None:
         init_s = torch.tensor(scale, dtype=dtype)
         model.scale.requires_grad = False
-    model.reset_params(transl=init_t, global_orient=init_r, scale=init_s)
+    if shape is not None:
+        init_shape = torch.tensor(shape, dtype=dtype)
+        model.betas.requires_grad = False
+    model.reset_params(transl=init_t, global_orient=init_r, scale=init_s, betas=init_shape)
         

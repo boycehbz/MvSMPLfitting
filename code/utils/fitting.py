@@ -238,6 +238,8 @@ class SMPLifyLoss(nn.Module):
 
         self.shape_prior = shape_prior
 
+        self.fix_shape = kwargs.get('fix_shape')
+
         self.interpenetration = interpenetration
         if self.interpenetration:
             self.search_tree = search_tree
@@ -316,8 +318,10 @@ class SMPLifyLoss(nn.Module):
                 pprior_loss = 0.
             pprior_loss += body_model_output.body_pose.pow(2).sum() * (self.body_pose_weight * 4) ** 2
 
-        shape_loss = torch.sum(self.shape_prior(
-            body_model_output.betas)) * self.shape_weight ** 2
+        shape_loss = 0.
+        if not self.fix_shape:
+            shape_loss = torch.sum(self.shape_prior(
+                body_model_output.betas)) * self.shape_weight ** 2
         # Calculate the prior over the joint rotations. This a heuristic used
         # to prevent extreme rotation of the elbows and knees
         body_pose = body_model_output.full_pose[:, 3:66]

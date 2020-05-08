@@ -65,34 +65,18 @@ lr: 1.0
 # Max number of optimization iterations
 maxiters: 30
 
-# joints_to_ign:
-    # - 1
-    # - 9
-    # - 12
-
-
-
-# 
-# use_pca: True
-# use_hands: False
-# use_face: False
-# flat_hand_mean: False
-# # The number of mixture components for the pose prior
-# num_gaussians: 8
-# focal_length: 5000
-# num_pca_comps: 12
-# # The constant for the robust loss function
-# 
-# 
-# df_cone_height: 0.0001
-# # Upper arms and Spine 2
-# # Neck and jaw
-# ign_part_pairs: ["9,16", "9,17", "6,16", "6,17", "1,2", "12,22"]
-# penalize_outside: True
-# max_collisions: 128
-# # LBFGS with line search
-
-# 
-# 
-
-
+# fixed parameter
+fix_scale: true
+scale: 100
+fix_shape: false
+shape:
+    - 2.39806 
+    - 0.678491
+    - 1.38193 
+    - -0.966748 
+    - -1.29383 
+    - -0.795755 
+    - -0.303195 
+    - -1.1032 
+    - -0.197056 
+    - -0.102728 
