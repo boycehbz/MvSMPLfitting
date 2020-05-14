@@ -16,6 +16,12 @@ Run ```python code/main.py```
 
 ## Reference
 ```
+@article{outdoor,
+  title = {Outdoor Markerless Motion Capture with Sparse Handheld Video Cameras},
+  author = {Yangang Wang, Yebin Liu, Xin Tong, Qionghai Dai and Ping Tan},
+  booktitle = {IEEE Transactions on Visualization and Computer Graphics},
+  year = {2018}
+}
 @inproceedings{SMPL-X:2019,
   title = {Expressive Body Capture: 3D Hands, Face, and Body from a Single Image},
   author = {Pavlakos, Georgios and Choutas, Vasileios and Ghorbani, Nima and Bolkart, Timo and Osman, Ahmed A. A. and Tzionas, Dimitrios and Black, Michael J.},

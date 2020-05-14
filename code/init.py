@@ -162,6 +162,7 @@ def init(**kwarg):
                                      requires_grad=True)
 
     # process fixed parameters
+    setting['fix_scale'] = kwarg.get('fix_scale')
     if kwarg.get('fix_scale'):
         setting['fixed_scale'] = np.array(kwarg.get('scale'))
     else:

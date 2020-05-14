@@ -10,13 +10,26 @@ def init_guess(setting, data, use_torso=False, **kwargs):
     keypoints = data['keypoints']
     batch_size = setting['batch_size']
     device = setting['device']
+    est_scale = not setting['fix_scale']
+    fixed_scale = 1. if setting['fixed_scale'] is None else setting['fixed_scale']
     joints3d = recompute3D(setting['extris'], setting['intris'], keypoints)
 
+    # reset model
+    init_t = torch.zeros((1,3), dtype=dtype)
+    init_r = torch.zeros((1,3), dtype=dtype)
+    init_s = torch.tensor(fixed_scale, dtype=dtype)
+    init_shape = torch.zeros((1,10), dtype=dtype)
+    model.reset_params(transl=init_t, global_orient=init_r, scale=init_s, betas=init_shape)
+
+    init_pose = torch.zeros((1,69), dtype=dtype).cuda()
+    model_output = model(return_verts=True, return_full_pose=True, body_pose=init_pose)
+    verts = model_output.vertices[0]
     if kwargs.get('model_type') == 'smpllsp':
-        J = torch.matmul(model.joint_regressor, model.v_template)
+        J = torch.matmul(model.joint_regressor, verts)
     else:
-        J = torch.matmul(model.J_regressor, model.v_template)
-    verts = model.v_template.unsqueeze(0)
+        J = torch.matmul(model.J_regressor, verts)
+
+    verts = verts.unsqueeze(0)
     J = J.unsqueeze(0)
     joints = model.vertex_joint_selector(verts, J)
     # Map the joints to the current dataset
@@ -26,11 +39,14 @@ def init_guess(setting, data, use_torso=False, **kwargs):
         joints3d = joints3d[[5,6,11,12]]
         joints = joints[[5,6,11,12]]
     # get transformation
-    rot, trans, scale = umeyama(joints, joints3d, True)
+    rot, trans, scale = umeyama(joints, joints3d, est_scale)
     rot = cv2.Rodrigues(rot)[0]
     # apply to model
+    if est_scale:
+        init_s = torch.tensor(scale, dtype=dtype)
+    else:
+        init_s = torch.tensor(fixed_scale, dtype=dtype)
     init_t = torch.tensor(trans, dtype=dtype)
-    init_s = torch.tensor(scale, dtype=dtype)
     init_r = torch.tensor(rot, dtype=dtype).reshape(1,3)
     model.reset_params(transl=init_t, global_orient=init_r, scale=init_s)
 
@@ -39,9 +55,9 @@ def init_guess(setting, data, use_torso=False, **kwargs):
             setting['pose_embedding'].fill_(0)
 
     # # load fixed parameters
-    # init_s = torch.tensor(100., dtype=dtype)
+    # init_s = torch.tensor(7., dtype=dtype)
     # init_shape = torch.tensor([2.39806, 0.678491, -1.38193, -0.966748, -1.29383,-0.795755, -0.303195, -1.1032, -0.197056, -0.102728 ], dtype=dtype)
-    # model.reset_params(betas=init_shape, scale=init_s)
+    # model.reset_params(transl=init_t, global_orient=init_r, scale=init_s)
     # model.betas.requires_grad = False
     # model.scale.requires_grad = False
 
@@ -53,8 +69,8 @@ def init_guess(setting, data, use_torso=False, **kwargs):
     # import numpy as np
     # from test_code.projection import joint_projection, surface_projection
     # for i in range(6):
-    #     joint_projection(joints3d, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], True)
-    #     surface_projection(verts, model.faces, joints, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], 0)
+    #     joint_projection(joints3d, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], True, op=0)
+    #     surface_projection(verts, model.faces, joints, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], 5)
 
 
 def load_init(setting, data, results, use_torso=False, **kwargs):

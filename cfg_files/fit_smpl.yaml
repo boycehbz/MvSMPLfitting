@@ -55,7 +55,7 @@ coll_loss_weights:
     - 0.0
     - 0.01
     - 1.0
-    
+
 # optimization related
 rho: 100
 optim_type: 'lbfgsls' #lbfgsls
@@ -66,8 +66,8 @@ lr: 1.0
 maxiters: 30
 
 # fixed parameter
-fix_scale: true
-scale: 100
+fix_scale: false
+scale: 7.
 fix_shape: false
 shape:
     - 2.39806 

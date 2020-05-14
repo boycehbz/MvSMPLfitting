@@ -78,11 +78,33 @@ def umeyama(src, dst, estimate_scale):
     else:
         scale = 1.0
 
+    # the python umeyama get a wrong rotation in some unknow condition
+    # so we compare the two results and choose the minimum
+    # it will be fixed in the future
+    homo_src = np.insert(src, 3, 1, axis=1).T
+    rot = T[:dim,:dim]
+
+    rots = []
+    losses = []
+    for i in range(2):
+        if i == 1:
+            rot[:,:2] *= -1
+        transform = np.eye(dim + 1, dtype=np.double)
+        transform[:dim,:dim] = rot * scale
+        transform[:dim,dim] = dst_mean - scale * np.dot(T[:dim, :dim], src_mean.T)
+        transed = np.dot(transform, homo_src).T[:,:3]
+        loss = np.linalg.norm(transed - dst)
+        losses.append(loss)
+        rots.append(rot.copy())
     # T[:dim, dim] = dst_mean - scale * np.dot(T[:dim, :dim], src_mean.T)
     # T[:dim, :dim] *= scale
+    # print(T)
 
     # since only the smpl parameters is needed, we return rotation, translation and scale 
-    rot = T[:dim,:dim]
     trans = dst_mean - scale * np.dot(T[:dim, :dim], src_mean.T)
+    if losses[0] > losses[1]:
+        rot = rots[1]
+    else:
+        rot = rots[0]
 
     return rot, trans, scale
