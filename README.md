@@ -9,7 +9,7 @@ A multi-view SMPL fitting based on smplify-x
 
 
 ## Demo
-Download the model from [\[Baidu Netdisk\]](https://pan.baidu.com/s/1e9BFVPP9hK0Ps9174h0WuA) \[**gllf**\] and put it under root directory.
+Download the model from [\[Baidu Netdisk\]](https://pan.baidu.com/s/1e9BFVPP9hK0Ps9174h0WuA) \[**verification code：gllf**\] and put it under root directory.
 
 Run ```python code/main.py```
 
