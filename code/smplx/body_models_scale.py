@@ -77,7 +77,7 @@ def create_scale(model_path, model_type='smpl',
 
     # If it's a folder, assume
     if osp.isdir(model_path):
-        model_path = os.path.join(model_path, model_type)
+        model_path = os.path.join(model_path, 'smpl')
 
     if model_type.lower() == 'smpl' or model_type.lower() == 'smpllsp':
         return SMPL(model_path, model_type=model_type, **kwargs)
@@ -178,7 +178,6 @@ class SMPL(nn.Module):
             with open(smpl_path, 'rb') as smpl_file:
                 data_struct = Struct(**pickle.load(smpl_file,
                                                    encoding='latin1'))
-
 
         super(SMPL, self).__init__()
         self.batch_size = batch_size
@@ -282,8 +281,8 @@ class SMPL(nn.Module):
             to_tensor(to_np(shapedirs), dtype=dtype))
 
         if self.model_type == 'smpllsp':
-            joint_regressor = to_tensor(to_np(
-                data_struct.joint_regressor), dtype=dtype)
+            lsp_regressor = np.load('data/J_regressor_lsp.npz')['joint_regressor']
+            joint_regressor = to_tensor(lsp_regressor, dtype=dtype)
             self.register_buffer('joint_regressor', joint_regressor)
 
         j_regressor = to_tensor(to_np(

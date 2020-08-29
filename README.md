@@ -9,7 +9,7 @@ A multi-view SMPL fitting based on smplify-x
 
 
 ## Demo
-Download the model from [\[Baidu Netdisk\]](https://pan.baidu.com/s/1e9BFVPP9hK0Ps9174h0WuA) \[**verification code：gllf**\] and put the ```models``` folder under root directory.
+Download the netural model from [SMPLify website](http://smplify.is.tuebingen.mpg.de/) and the male/female model from [SMPL website](https://smpl.is.tue.mpg.de/). Then rename the .pkl file and put them in ```models/smpl``` folder. (see ![data](./models/smpl/readme.txt))
 
 Run ```python code/main.py```
 
