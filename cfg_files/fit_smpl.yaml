@@ -67,7 +67,7 @@ maxiters: 30
 
 # fixed parameter
 fix_scale: false
-scale: 7.
+scale: 1000.
 fix_shape: false
 shape:
     - 2.39806 

@@ -13,6 +13,9 @@ def init_guess(setting, data, use_torso=False, **kwargs):
     est_scale = not setting['fix_scale']
     fixed_scale = 1. if setting['fixed_scale'] is None else setting['fixed_scale']
     joints3d = recompute3D(setting['extris'], setting['intris'], keypoints)
+    if kwargs.get('use_3d'):
+        joints3d = data['3d_joint'][0][:,:3]
+
 
     # reset model
     init_t = torch.zeros((1,3), dtype=dtype)

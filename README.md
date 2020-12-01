@@ -9,9 +9,9 @@ A multi-view SMPL fitting based on smplify-x
 
 
 ## Demo
-Download the official SMPL model from [SMPLify website](http://smplify.is.tuebingen.mpg.de/) \(netural) and [SMPL website](https://smpl.is.tue.mpg.de/) \(male/female). Then, rename the .pkl files and put them in ```models/smpl``` folder. (see [models/smpl/readme.txt](./models/smpl/readme.txt))
+Download the official SMPL model from [SMPLify website](http://smplify.is.tuebingen.mpg.de/) \(netural) and [SMPL website](https://smpl.is.tue.mpg.de/) \(male/female). Then, rename the .pkl files and put them in the ```models/smpl``` folder. (see [models/smpl/readme.txt](./models/smpl/readme.txt))
 
-Run ```python code/main.py```
+Run ```python code/main.py --config cfg_files/fit_smpl.yaml```
 
 
 ## Reference

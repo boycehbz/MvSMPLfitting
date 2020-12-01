@@ -75,11 +75,12 @@ def non_linear_solver(
             joints_conf.append(conf)
 
     if use_3d:
+        joints3d = data['3d_joint'][0]
         joints_data = torch.tensor(joints3d, dtype=dtype)
         gt_joints3d = joints_data[:, :3]
         if use_joints_conf:
             joints3d_conf = joints_data[:, 3].reshape(1, -1).to(device=device, dtype=dtype)
-            if not use_hip:
+            if not kwargs.get('use_hip'):
                 joints3d_conf[0][11] = 0
                 joints3d_conf[0][12] = 0
 

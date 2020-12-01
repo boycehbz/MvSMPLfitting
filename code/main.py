@@ -47,7 +47,7 @@ def main(**args):
                 imgs.append(data['img'][v])
                 views += 1
         # viewpoint should greater than 1 if not use 3D annotation
-        if views < 4 and not setting["use_3d"]:
+        if views < 2 and not setting["use_3d"]:
             s_last = None
             continue
         setting['views'] = views
