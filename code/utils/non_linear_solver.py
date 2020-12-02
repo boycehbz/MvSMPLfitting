@@ -58,6 +58,8 @@ def non_linear_solver(
     camera = setting['camera']
     pose_embedding = setting['pose_embedding']
     seq_start = setting['seq_start']
+    if data['3d_joint'] is None:
+        use_3d = False
 
     assert (len(data_weights) ==
             len(body_pose_prior_weights) and len(shape_weights) ==
@@ -74,7 +76,7 @@ def non_linear_solver(
             conf = conf.to(device=device, dtype=dtype)
             joints_conf.append(conf)
 
-    if use_3d:
+    if use_3d: #:
         joints3d = data['3d_joint'][0]
         joints_data = torch.tensor(joints3d, dtype=dtype)
         gt_joints3d = joints_data[:, :3]

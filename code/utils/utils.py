@@ -15,6 +15,128 @@ try:
 except ImportError:
     import pickle
 import cv2
+from copy import deepcopy
+
+def estimate_translation_from_intri(S, joints_2d, joints_conf, fx=5000., fy=5000., cx=128., cy=128.):
+    num_joints = S.shape[0]
+    # focal length
+    f = np.array([fx, fy])
+    # optical center
+   # center = np.array([img_size/2., img_size/2.])
+    center = np.array([cx, cy])
+    # transformations
+    Z = np.reshape(np.tile(S[:,2],(2,1)).T,-1)
+    XY = np.reshape(S[:,0:2],-1)
+    O = np.tile(center,num_joints)
+    F = np.tile(f,num_joints)
+    weight2 = np.reshape(np.tile(np.sqrt(joints_conf),(2,1)).T,-1)
+
+    # least squares
+    Q = np.array([F*np.tile(np.array([1,0]),num_joints), F*np.tile(np.array([0,1]),num_joints), O-np.reshape(joints_2d,-1)]).T
+    c = (np.reshape(joints_2d,-1)-O)*Z - F*XY
+
+    # weighted least squares
+    W = np.diagflat(weight2)
+    Q = np.dot(W,Q)
+    c = np.dot(W,c)
+
+    # square matrix
+    A = np.dot(Q.T,Q)
+    b = np.dot(Q.T,c)
+
+    # test
+    A += np.eye(A.shape[0]) * 1e-6
+
+    # solution
+    trans = np.linalg.solve(A, b)
+    return trans
+
+def cal_trans(J3d, J2d, intri):
+    fx = intri[0][0]
+    fy = intri[1][1]
+    cx = intri[0][2]
+    cy = intri[1][2]
+    j_conf = J2d[:,2] 
+    gt_cam_t = estimate_translation_from_intri(J3d, J2d[:,:2], j_conf, cx=cx, cy=cy, fx=fx, fy=fy)
+    return gt_cam_t
+
+def surface_projection(vertices, faces, joint, exter, intri, image, op):
+    im = deepcopy(image)
+
+    intri_ = np.insert(intri,3,values=0.,axis=1)
+    temp_v = np.insert(vertices,3,values=1.,axis=1).transpose((1,0))
+
+    out_point = np.dot(exter, temp_v)
+    dis = out_point[2]
+    out_point = (np.dot(intri_, out_point) / dis)[:-1]
+    out_point = (out_point.astype(np.int32)).transpose(1,0)
+    max = dis.max()
+    min = dis.min()
+    t = 255./(max-min)
+    
+    img_faces = []
+    color = (255, 255, 255)
+    for f in faces:
+        point = out_point[f]
+        im = cv2.polylines(im, [point], True, color, 1)
+        
+    temp_joint = np.insert(joint,3,values=1.,axis=1).transpose((1,0))
+    out_point = np.dot(exter, temp_joint)
+    dis = out_point[2]
+    out_point = (np.dot(intri_, out_point) / dis)[:-1].astype(np.int32)
+    out_point = out_point.transpose(1,0)
+    for i in range(len(out_point)):
+        if i == op:
+            im = cv2.circle(im, tuple(out_point[i]), 2, (0,0,255),-1)
+        else:
+            im = cv2.circle(im, tuple(out_point[i]), 2, (255,0,0),-1)
+
+    ratiox = 800/int(im.shape[0])
+    ratioy = 800/int(im.shape[1])
+    if ratiox < ratioy:
+        ratio = ratiox
+    else:
+        ratio = ratioy
+
+    cv2.namedWindow("mesh",0)
+    cv2.resizeWindow("mesh",int(im.shape[1]*ratio),int(im.shape[0]*ratio))
+    cv2.moveWindow("mesh",0,0)
+    cv2.imshow('mesh',im)
+    cv2.waitKey()
+
+    return out_point, im
+
+def joint_projection(joint, extri, intri, image, viz=False):
+
+    im = deepcopy(image)
+
+    intri_ = np.insert(intri,3,values=0.,axis=1)
+    temp_joint = np.insert(joint,3,values=1.,axis=1).transpose((1,0))
+    out_point = np.dot(extri, temp_joint)
+    dis = out_point[2]
+    out_point = (np.dot(intri_, out_point) / dis)[:-1].astype(np.int32)
+    out_point = out_point.transpose(1,0)
+
+    if viz:
+        for i in range(len(out_point)):
+            im = cv2.circle(im, tuple(out_point[i]), 10, (0,0,255),-1)
+
+
+        ratiox = 800/int(im.shape[0])
+        ratioy = 800/int(im.shape[1])
+        if ratiox < ratioy:
+            ratio = ratiox
+        else:
+            ratio = ratioy
+
+        cv2.namedWindow("mesh",0)
+        cv2.resizeWindow("mesh",int(im.shape[1]*ratio),int(im.shape[0]*ratio))
+        cv2.moveWindow("mesh",0,0)
+        cv2.imshow('mesh',im)
+        cv2.waitKey()
+
+    return out_point, im
+
 
 def rel_change(prev_val, curr_val):
     return (prev_val - curr_val) / max([np.abs(prev_val), np.abs(curr_val), 1])

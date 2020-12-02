@@ -95,42 +95,46 @@ def read_joints(keypoint_fn, use_hands=True, use_face=True,
     gender_pd = []
     gender_gt = []
     for idx, person_data in enumerate(data['people']):
-        body_keypoints = np.array(person_data['pose_keypoints_3d'],
-                                  dtype=np.float32)
-        body_keypoints = body_keypoints.reshape([-1, 4])
-        if use_hands:
-            left_hand_keyp = np.array(
-                person_data['hand_left_keypoints_3d'],
-                dtype=np.float32).reshape([-1, 4])
-            right_hand_keyp = np.array(
-                person_data['hand_right_keypoints_3d'],
-                dtype=np.float32).reshape([-1, 4])
+        try:
+            body_keypoints = np.array(person_data['pose_keypoints_3d'],
+                                    dtype=np.float32)
+            body_keypoints = body_keypoints.reshape([-1, 4])
+            if use_hands:
+                left_hand_keyp = np.array(
+                    person_data['hand_left_keypoints_3d'],
+                    dtype=np.float32).reshape([-1, 4])
+                right_hand_keyp = np.array(
+                    person_data['hand_right_keypoints_3d'],
+                    dtype=np.float32).reshape([-1, 4])
 
-            body_keypoints = np.concatenate(
-                [body_keypoints, left_hand_keyp, right_hand_keyp], axis=0)
-        if use_face:
-            # TODO: Make parameters, 17 is the offset for the eye brows,
-            # etc. 51 is the total number of FLAME compatible landmarks
-            face_keypoints = np.array(
-                person_data['face_keypoints_3d'],
-                dtype=np.float32).reshape([-1, 4])[17: 17 + 51, :]
-
-            contour_keyps = np.array(
-                [], dtype=body_keypoints.dtype).reshape(0, 4)
-            if use_face_contour:
-                contour_keyps = np.array(
+                body_keypoints = np.concatenate(
+                    [body_keypoints, left_hand_keyp, right_hand_keyp], axis=0)
+            if use_face:
+                # TODO: Make parameters, 17 is the offset for the eye brows,
+                # etc. 51 is the total number of FLAME compatible landmarks
+                face_keypoints = np.array(
                     person_data['face_keypoints_3d'],
-                    dtype=np.float32).reshape([-1, 4])[:17, :]
+                    dtype=np.float32).reshape([-1, 4])[17: 17 + 51, :]
 
-            body_keypoints = np.concatenate(
-                [body_keypoints, face_keypoints, contour_keyps], axis=0)
+                contour_keyps = np.array(
+                    [], dtype=body_keypoints.dtype).reshape(0, 4)
+                if use_face_contour:
+                    contour_keyps = np.array(
+                        person_data['face_keypoints_3d'],
+                        dtype=np.float32).reshape([-1, 4])[:17, :]
+
+                body_keypoints = np.concatenate(
+                    [body_keypoints, face_keypoints, contour_keyps], axis=0)
+            keypoints.append(body_keypoints)
+        except:
+            keypoints = None
 
         if 'gender_pd' in person_data:
             gender_pd.append(person_data['gender_pd'])
         if 'gender_gt' in person_data:
             gender_gt.append(person_data['gender_gt'])
 
-        keypoints.append(body_keypoints)
+        
 
     return Keypoints(keypoints=keypoints, gender_pd=gender_pd,
                      gender_gt=gender_gt)

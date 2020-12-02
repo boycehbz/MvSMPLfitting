@@ -1,8 +1,11 @@
 from utils.recompute3D import recompute3D
 import torch
+import numpy as np
 from utils.umeyama import umeyama
 import cv2
 from collections import defaultdict
+from utils.utils import cal_trans
+
 
 def init_guess(setting, data, use_torso=False, **kwargs):
     model = setting['model']
@@ -12,10 +15,6 @@ def init_guess(setting, data, use_torso=False, **kwargs):
     device = setting['device']
     est_scale = not setting['fix_scale']
     fixed_scale = 1. if setting['fixed_scale'] is None else setting['fixed_scale']
-    joints3d = recompute3D(setting['extris'], setting['intris'], keypoints)
-    if kwargs.get('use_3d'):
-        joints3d = data['3d_joint'][0][:,:3]
-
 
     # reset model
     init_t = torch.zeros((1,3), dtype=dtype)
@@ -38,6 +37,36 @@ def init_guess(setting, data, use_torso=False, **kwargs):
     # Map the joints to the current dataset
     if model.joint_mapper is not None:
         joints = model.joint_mapper(joints).detach().cpu().numpy()[0]
+
+    if len(keypoints) == 1:
+        # guess depth for single-view input
+        # 5 is L shoulder, 11 is L hip
+        # 6 is R shoulder, 12 is R hip
+        torso3d = joints[[5,6,11,12]]
+        torso2d = keypoints[0][0][[5,6,11,12]]
+        torso3d = np.insert(torso3d, 3, 1, axis=1).T
+        torso3d = (np.dot(setting['extris'][0], torso3d).T)[:,:3]
+
+        diff3d = np.array([torso3d[0] - torso3d[2], torso3d[1] - torso3d[3]])
+        mean_height3d = np.mean(np.sqrt(np.sum(diff3d**2, axis=1)))
+
+        diff2d = np.array([torso2d[0] - torso2d[2], torso2d[0] - torso2d[2]])
+        mean_height2d = np.mean(np.sqrt(np.sum(diff2d**2, axis=1)))
+
+        est_d = setting['intris'][0][0][0] * (mean_height3d / mean_height2d)
+        # just set the z value
+        cam_joints = np.dot(setting['extris'][0], np.insert(joints.copy(), 3, 1, axis=1).T)
+        cam_joints[2,:] += est_d
+        joints3d = (np.dot(np.linalg.inv(setting['extris'][0]), cam_joints).T)[:,:3]
+
+        # trans = cal_trans(camcoord, keypoints[0][0][[5,6,11,12]], setting['intris'][0])
+        # trans = np.dot(np.linalg.inv(setting['extris'][0]), np.insert(trans.reshape(3,1), 3, 1, axis=0)).reshape(1,-1)[:,:3]
+        # joints3d = joints + trans
+    else:
+        joints3d = recompute3D(setting['extris'], setting['intris'], keypoints)
+    if kwargs.get('use_3d') and data['3d_joint'] is not None:
+        joints3d = data['3d_joint'][0][:,:3]
+
     if use_torso:
         joints3d = joints3d[[5,6,11,12]]
         joints = joints[[5,6,11,12]]
@@ -64,16 +93,58 @@ def init_guess(setting, data, use_torso=False, **kwargs):
     # model.betas.requires_grad = False
     # model.scale.requires_grad = False
 
-    # # visualize
-    # init_pose = torch.zeros((1,69), dtype=dtype).cuda()
-    # model_output = model(return_verts=True, return_full_pose=True, body_pose=init_pose)
-    # joints = model_output.joints.detach().cpu().numpy()[0]
-    # verts = model_output.vertices.detach().cpu().numpy()[0]
-    # import numpy as np
-    # from test_code.projection import joint_projection, surface_projection
-    # for i in range(6):
-    #     joint_projection(joints3d, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], True, op=0)
-    #     surface_projection(verts, model.faces, joints, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], 5)
+    # visualize
+    if False:
+        init_pose = torch.zeros((1,69), dtype=dtype).cuda()
+        model_output = model(return_verts=True, return_full_pose=True, body_pose=init_pose)
+        joints = model_output.joints.detach().cpu().numpy()[0]
+        verts = model_output.vertices.detach().cpu().numpy()[0]
+
+        # import open3d as o3d
+        # window_size = 1080
+        # # pcd = o3d.geometry.PointCloud()
+        # # pcd.points = o3d.utility.Vector3dVector(verts)
+        # # o3d.visualization.draw_geometries([pcd])
+
+        # mesh = o3d.geometry.TriangleMesh()
+        # mesh.triangles = o3d.utility.Vector3iVector(model.faces)
+        # mesh.vertices = o3d.utility.Vector3dVector(verts)
+        # mesh.compute_vertex_normals()
+
+        # viewer = o3d.visualization.Visualizer()
+
+        # viewer.create_window(
+        #     width=window_size + 1, height=window_size + 1,
+        #     window_name='MvSMPLfitting'
+        # )
+        # viewer.add_geometry(mesh)
+
+        # view_control = viewer.get_view_control()
+        # cam_params = view_control.convert_to_pinhole_camera_parameters()
+        # extrinsic = setting['extris'][0]
+        # cam_params.extrinsic = extrinsic
+        # fx = setting['intris'][0][0][0]
+        # fy = setting['intris'][0][1][1]
+        # tx = setting['intris'][0][0][2]
+        # ty = setting['intris'][0][1][2]
+        # cam_params.intrinsic.set_intrinsics(
+        #     window_size + 1, window_size + 1, 2200, 2200,
+        #     window_size // 2, window_size // 2
+        # )
+        # view_control.convert_from_pinhole_camera_parameters(cam_params)
+        # view_control.set_constant_z_far(1000)
+
+        # render_option = viewer.get_render_option()
+        # render_option.load_from_json('./render_option.json')
+        # viewer.update_renderer()
+
+        # while True:
+        #     viewer.update_geometry(mesh)
+
+        from utils.utils import joint_projection, surface_projection
+        for i in range(1):
+            joint_projection(joints3d, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], True)
+            surface_projection(verts, model.faces, joints, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], 5)
 
 
 def load_init(setting, data, results, use_torso=False, **kwargs):
