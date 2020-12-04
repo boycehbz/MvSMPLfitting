@@ -16,11 +16,12 @@ Run ```python code/main.py --config cfg_files/fit_smpl.yaml```
 
 ## Reference
 ```
-@article{outdoor,
-  title = {Outdoor Markerless Motion Capture with Sparse Handheld Video Cameras},
-  author = {Yangang Wang, Yebin Liu, Xin Tong, Qionghai Dai and Ping Tan},
-  booktitle = {IEEE Transactions on Visualization and Computer Graphics},
-  year = {2018}
+@inproceedings{zhang2020object,
+  title={Object-Occluded Human Shape and Pose Estimation From a Single Color Image},
+  author={Zhang, Tianshu and Huang, Buzhen and Wang, Yangang},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  pages={7376--7385},
+  year={2020}
 }
 @inproceedings{SMPL-X:2019,
   title = {Expressive Body Capture: 3D Hands, Face, and Body from a Single Image},
