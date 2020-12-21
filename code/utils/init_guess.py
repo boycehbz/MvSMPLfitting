@@ -95,51 +95,16 @@ def init_guess(setting, data, use_torso=False, **kwargs):
 
     # visualize
     if False:
-        init_pose = torch.zeros((1,69), dtype=dtype).cuda()
+        if kwargs.get('use_vposer'):
+            vposer = setting['vposer']
+            init_pose = vposer.decode(
+                setting['pose_embedding'], output_type='aa').view(
+                    1, -1)
+        else:
+            init_pose = torch.zeros((1,69), dtype=dtype).cuda()
         model_output = model(return_verts=True, return_full_pose=True, body_pose=init_pose)
         joints = model_output.joints.detach().cpu().numpy()[0]
         verts = model_output.vertices.detach().cpu().numpy()[0]
-
-        # import open3d as o3d
-        # window_size = 1080
-        # # pcd = o3d.geometry.PointCloud()
-        # # pcd.points = o3d.utility.Vector3dVector(verts)
-        # # o3d.visualization.draw_geometries([pcd])
-
-        # mesh = o3d.geometry.TriangleMesh()
-        # mesh.triangles = o3d.utility.Vector3iVector(model.faces)
-        # mesh.vertices = o3d.utility.Vector3dVector(verts)
-        # mesh.compute_vertex_normals()
-
-        # viewer = o3d.visualization.Visualizer()
-
-        # viewer.create_window(
-        #     width=window_size + 1, height=window_size + 1,
-        #     window_name='MvSMPLfitting'
-        # )
-        # viewer.add_geometry(mesh)
-
-        # view_control = viewer.get_view_control()
-        # cam_params = view_control.convert_to_pinhole_camera_parameters()
-        # extrinsic = setting['extris'][0]
-        # cam_params.extrinsic = extrinsic
-        # fx = setting['intris'][0][0][0]
-        # fy = setting['intris'][0][1][1]
-        # tx = setting['intris'][0][0][2]
-        # ty = setting['intris'][0][1][2]
-        # cam_params.intrinsic.set_intrinsics(
-        #     window_size + 1, window_size + 1, 2200, 2200,
-        #     window_size // 2, window_size // 2
-        # )
-        # view_control.convert_from_pinhole_camera_parameters(cam_params)
-        # view_control.set_constant_z_far(1000)
-
-        # render_option = viewer.get_render_option()
-        # render_option.load_from_json('./render_option.json')
-        # viewer.update_renderer()
-
-        # while True:
-        #     viewer.update_geometry(mesh)
 
         from utils.utils import joint_projection, surface_projection
         for i in range(1):
@@ -177,16 +142,23 @@ def load_init(setting, data, results, use_torso=False, **kwargs):
                                 )
     model.reset_params(**new_params)
 
-    # # visualize
-    # init_pose = torch.tensor(results['body_pose'], dtype=dtype).cuda()
-    # model_output = model(return_verts=True, return_full_pose=True, body_pose=init_pose)
-    # joints = model_output.joints.detach().cpu().numpy()[0]
-    # verts = model_output.vertices.detach().cpu().numpy()[0]
-    # import numpy as np
-    # from test_code.projection import joint_projection, surface_projection
-    # for i in range(6):
-    #     # joint_projection(joints3d, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], True)
-    #     surface_projection(verts, model.faces, joints, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], 0)
+    # visualize
+    if False:
+        if kwargs.get('use_vposer'):
+            vposer = setting['vposer']
+            init_pose = vposer.decode(
+                setting['pose_embedding'], output_type='aa').view(
+                    1, -1)
+        else:
+            init_pose = torch.zeros((1,69), dtype=dtype).cuda()
+        model_output = model(return_verts=True, return_full_pose=True, body_pose=init_pose)
+        joints = model_output.joints.detach().cpu().numpy()[0]
+        verts = model_output.vertices.detach().cpu().numpy()[0]
+
+        from utils.utils import joint_projection, surface_projection
+        for i in range(1):
+            # joint_projection(joints3d, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], True)
+            surface_projection(verts, model.faces, joints, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], 5)
 
 def fix_params(setting, scale=None, shape=None):
     dtype = setting['dtype']
