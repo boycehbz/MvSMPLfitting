@@ -32,6 +32,7 @@ import torch.nn as nn
 from utils import utils
 import cv2
 
+
 @torch.no_grad()
 class FittingMonitor():
     def __init__(self, summary_steps=1, visualize=False,
@@ -228,7 +229,7 @@ class SMPLifyLoss(nn.Module):
 
         self.use_joints_conf = use_joints_conf
         self.angle_prior = angle_prior
-
+        
         self.use_3d = use_3d
 
         self.robustifier = utils.GMoF(rho=rho)
@@ -242,9 +243,11 @@ class SMPLifyLoss(nn.Module):
 
         self.interpenetration = interpenetration
         if self.interpenetration:
-            self.search_tree = search_tree
-            self.tri_filtering_module = tri_filtering_module
-            self.pen_distance = pen_distance
+            from sdf import SDF
+            self.sdf = SDF()
+            # self.search_tree = search_tree
+            # self.tri_filtering_module = tri_filtering_module
+            # self.pen_distance = pen_distance
 
         self.register_buffer('data_weight',
                              torch.tensor(data_weight, dtype=dtype))
@@ -269,6 +272,14 @@ class SMPLifyLoss(nn.Module):
                                                  dtype=weight_tensor.dtype,
                                                  device=weight_tensor.device)
                 setattr(self, key, weight_tensor)
+
+    def get_bounding_boxes(self, vertices):
+        num_people = vertices.shape[0]
+        boxes = torch.zeros(num_people, 2, 3, device=vertices.device)
+        for i in range(num_people):
+            boxes[i, 0, :] = vertices[i].min(dim=0)[0]
+            boxes[i, 1, :] = vertices[i].max(dim=0)[0]
+        return boxes
 
     def forward(self, body_model_output, camera, gt_joints, joints_conf,
                 body_model_faces, joint_weights,
@@ -334,22 +345,58 @@ class SMPLifyLoss(nn.Module):
         pen_loss = 0.0
         # Calculate the loss due to interpenetration
         if (self.interpenetration and self.coll_loss_weight.item() > 0):
-            batch_size = projected_joints.shape[0]
-            triangles = torch.index_select(
-                body_model_output.vertices, 1,
-                body_model_faces).view(batch_size, -1, 3, 3)
+            vertices = body_model_output.vertices
+            boxes = self.get_bounding_boxes(vertices)
+            boxes_center = boxes.mean(dim=1).unsqueeze(dim=1)
+            boxes_scale = (1+0.2) * 0.5*(boxes[:,1] - boxes[:,0]).max(dim=-1)[0][:,None,None]
 
             with torch.no_grad():
-                collision_idxs = self.search_tree(triangles)
+                vertices_centered = vertices - boxes_center
+                vertices_centered_scaled = vertices_centered / boxes_scale
+                assert(vertices_centered_scaled.min() >= -1)
+                assert(vertices_centered_scaled.max() <= 1)
+                assert(vertices.shape[0] == 1)
+                phi = self.sdf(body_model_faces.reshape(1, -1, 3).to(torch.int32), vertices_centered_scaled, grid_size=128)
+                assert(phi.min() >= 0)
 
-            # Remove unwanted collisions
-            if self.tri_filtering_module is not None:
-                collision_idxs = self.tri_filtering_module(collision_idxs)
+            valid_people = vertices.shape[0]
+            # Convert vertices to the format expected by grid_sample
+            for i in range(valid_people):
+                weights = torch.ones(valid_people, 1, device=vertices.device)
+                # weights[i,0] = 0.
+                # Change coordinate system to local coordinate system of each person
+                vertices_local = (vertices - boxes_center[i].unsqueeze(dim=0)) / boxes_scale[i].unsqueeze(dim=0)
+                vertices_grid = vertices_local.view(1,-1,1,1,3)
+                # Sample from the phi grid
+                phi_val = nn.functional.grid_sample(phi[i][None, None], vertices_grid).view(valid_people, -1)
+                # ignore the phi values for the i-th shape
+                cur_loss = weights * phi_val
+                # if self.debugging:
+                #     import ipdb;ipdb.set_trace()
+                # # robustifier
+                # if self.robustifier:
+                #     frac = (cur_loss / self.robustifier) ** 2
+                #     cur_loss = frac / (frac + 1)
 
-            if collision_idxs.ge(0).sum().item() > 0:
-                pen_loss = torch.sum(
-                    self.coll_loss_weight *
-                    self.pen_distance(triangles, collision_idxs))
+                pen_loss += self.coll_loss_weight * cur_loss.sum() / valid_people ** 2
+                # print(pen_loss)
+        # if (self.interpenetration and self.coll_loss_weight.item() > 0):
+        #     batch_size = projected_joints.shape[0]
+        #     triangles = torch.index_select(
+        #         body_model_output.vertices, 1,
+        #         body_model_faces).view(batch_size, -1, 3, 3)
+
+        #     with torch.no_grad():
+        #         collision_idxs = self.search_tree(triangles)
+
+        #     # Remove unwanted collisions
+        #     if self.tri_filtering_module is not None:
+        #         collision_idxs = self.tri_filtering_module(collision_idxs)
+
+        #     if collision_idxs.ge(0).sum().item() > 0:
+        #         pen_loss = torch.sum(
+        #             self.coll_loss_weight *
+        #             self.pen_distance(triangles, collision_idxs))
 
         total_loss = (joint_loss + joints3d_loss + pprior_loss + shape_loss +
                       angle_prior_loss + pen_loss)

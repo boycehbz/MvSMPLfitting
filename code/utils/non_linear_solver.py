@@ -98,35 +98,35 @@ def non_linear_solver(
     pen_distance = None
     filter_faces = None
     # we do not use this term at this time
-    if interpenetration:
-        from mesh_intersection.bvh_search_tree import BVH
-        import mesh_intersection.loss as collisions_loss
-        from mesh_intersection.filter_faces import FilterFaces
+    # if interpenetration:
+    #     from mesh_intersection.bvh_search_tree import BVH
+    #     import mesh_intersection.loss as collisions_loss
+    #     from mesh_intersection.filter_faces import FilterFaces
 
-        assert use_cuda, 'Interpenetration term can only be used with CUDA'
-        assert torch.cuda.is_available(), \
-            'No CUDA Device! Interpenetration term can only be used' + \
-            ' with CUDA'
+    #     assert use_cuda, 'Interpenetration term can only be used with CUDA'
+    #     assert torch.cuda.is_available(), \
+    #         'No CUDA Device! Interpenetration term can only be used' + \
+    #         ' with CUDA'
 
-        search_tree = BVH(max_collisions=max_collisions)
+    #     search_tree = BVH(max_collisions=max_collisions)
 
-        pen_distance = \
-            collisions_loss.DistanceFieldPenetrationLoss(
-                sigma=df_cone_height, point2plane=point2plane,
-                vectorized=True, penalize_outside=penalize_outside)
+    #     pen_distance = \
+    #         collisions_loss.DistanceFieldPenetrationLoss(
+    #             sigma=df_cone_height, point2plane=point2plane,
+    #             vectorized=True, penalize_outside=penalize_outside)
 
-        if part_segm_fn:
-            # Read the part segmentation
-            part_segm_fn = os.path.expandvars(part_segm_fn)
-            with open(part_segm_fn, 'rb') as faces_parents_file:
-                face_segm_data = pickle.load(faces_parents_file,
-                                             encoding='latin1')
-            faces_segm = face_segm_data['segm']
-            faces_parents = face_segm_data['parents']
-            # Create the module used to filter invalid collision pairs
-            filter_faces = FilterFaces(
-                faces_segm=faces_segm, faces_parents=faces_parents,
-                ign_part_pairs=ign_part_pairs).to(device=device)
+        # if part_segm_fn:
+        #     # Read the part segmentation
+        #     part_segm_fn = os.path.expandvars(part_segm_fn)
+        #     with open(part_segm_fn, 'rb') as faces_parents_file:
+        #         face_segm_data = pickle.load(faces_parents_file,
+        #                                      encoding='latin1')
+        #     faces_segm = face_segm_data['segm']
+        #     faces_parents = face_segm_data['parents']
+        #     # Create the module used to filter invalid collision pairs
+        #     filter_faces = FilterFaces(
+        #         faces_segm=faces_segm, faces_parents=faces_parents,
+        #         ign_part_pairs=ign_part_pairs).to(device=device)
 
     # Weights used for the pose prior and the shape prior
     opt_weights_dict = {'data_weight': data_weights,
