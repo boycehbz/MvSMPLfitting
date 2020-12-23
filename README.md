@@ -14,12 +14,12 @@ Download the official SMPL model from [SMPLify website](http://smplify.is.tuebin
 Run ```python code/main.py --config cfg_files/fit_smpl.yaml```
 
 ## Collision term
-We add a collision term based on [SDF](https://github.com/JiangWenPL/multiperson/tree/master/sdf). To use this term, you need to install sdf and set ```interpenetration: true``` in the ```cfg_files/fit_smpl.yaml``` before using this code.
+We add a collision term based on [SDF](https://github.com/JiangWenPL/multiperson/tree/master/sdf). You need to install sdf and set ```interpenetration: true``` in the ```cfg_files/fit_smpl.yaml``` before using this code.
 ```
 cd sdf
 python setup.py install
 ```
-![interpenetration](/images/interpenetration.jpg)
+![interpenetration](/images/interpenetration.png)
 
 ## Reference
 ```
