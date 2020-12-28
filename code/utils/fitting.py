@@ -378,7 +378,7 @@ class SMPLifyLoss(nn.Module):
                 #     frac = (cur_loss / self.robustifier) ** 2
                 #     cur_loss = frac / (frac + 1)
 
-                pen_loss += self.coll_loss_weight * cur_loss.sum() / valid_people ** 2
+                pen_loss += (self.coll_loss_weight * cur_loss.sum() / valid_people) ** 2
                 # print(pen_loss)
         # if (self.interpenetration and self.coll_loss_weight.item() > 0):
         #     batch_size = projected_joints.shape[0]

@@ -40,8 +40,8 @@ def recompute3D(extris, intris, keypoints):
             n = nomalized(n)
             nMat = fill_nMat(n)
             nMat = np.dot(R.T, nMat)
-            AtA[i] += np.dot(nMat, R) * conf[i]
-            Atb[i] += np.dot(-nMat, t) * conf[i]
+            AtA[i] += np.dot(nMat, R) * (conf[i] + 1e-6)
+            Atb[i] += np.dot(-nMat, t) * (conf[i] + 1e-6)
     
     AtA = AtA.astype(np.float32)
     for i in range(len(keps)):
