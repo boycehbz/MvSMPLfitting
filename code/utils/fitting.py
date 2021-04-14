@@ -69,7 +69,7 @@ class FittingMonitor():
             [batch_size, 1])
 
     def run_fitting(self, optimizer, closure, params, body_model,
-                    use_vposer=True, pose_embedding=None, vposer=None,
+                    use_vposer=True, pose_embedding=None, vposer=None, camera=None, img_path=None,
                     **kwargs):
         ''' Helper function for running an optimization process
             Parameters
@@ -93,7 +93,7 @@ class FittingMonitor():
                 loss: float
                 The final loss value
         '''
-        #append_wrists = self.model_type == 'smpl' and use_vposer
+        append_wrists = False
         prev_loss = None
         print('\n')
         for n in range(self.maxiters):
@@ -115,8 +115,9 @@ class FittingMonitor():
             if all([torch.abs(var.grad.view(-1).max()).item() < self.gtol
                     for var in params if var.grad is not None]):
                 break
-
+            
             if self.visualize and n % self.summary_steps == 0:
+            # if self.visualize and n % self.summary_steps == 0:
                 body_pose = vposer.decode(
                     pose_embedding, output_type='aa').view(
                         1, -1) if use_vposer else None
@@ -128,10 +129,12 @@ class FittingMonitor():
                     body_pose = torch.cat([body_pose, wrist_pose], dim=1)
                 model_output = body_model(
                     return_verts=True, body_pose=body_pose)
-                vertices = model_output.vertices.detach().cpu().numpy()
-
-                self.mv.update_mesh(vertices.squeeze(),
-                                    body_model.faces)
+                vertices = model_output.vertices.detach()
+                body_joints = model_output.joints.detach()
+                utils.visualize_fitting(body_joints, vertices, body_model.faces, camera, img_path, save=False)
+                cv2.waitKey()
+                # self.mv.update_mesh(vertices.squeeze(),
+                #                     body_model.faces)
 
             prev_loss = loss.item()
             print('stage fitting loss: ', prev_loss)

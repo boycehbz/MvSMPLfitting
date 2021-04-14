@@ -17,6 +17,9 @@ except ImportError:
 import cv2
 from copy import deepcopy
 
+
+vis_count = 0
+
 def estimate_translation_from_intri(S, joints_2d, joints_conf, fx=5000., fy=5000., cx=128., cy=128.):
     num_joints = S.shape[0]
     # focal length
@@ -275,7 +278,46 @@ def project_to_img(joints, verts, faces, gt_joints, camera, image_path, viz=Fals
 
             cv2.imwrite("%s/%s.jpg" %(path, view), img)
         
+def visualize_fitting(joints, verts, faces, camera, image_path, save=False, path='./temp_vis'):
+    global vis_count
+    d2j = []
+    vertices = []
+    for cam in camera:
+        d2j_ = cam(joints).detach().cpu().numpy().astype(np.int32)
+        vert = cam(verts).detach().cpu().numpy().astype(np.int32)
+        d2j.append(d2j_)
+        vertices.append(vert)
 
+    for v in range(len(image_path)):
+        img_dir = image_path[v]
+        view = img_dir.split('\\')[-2]
+        img = cv2.imread(img_dir)
+        for f in faces:
+            color = 255
+            point = vertices[v][0][f]
+            img = cv2.polylines(img,[point],True,(color,color,color),1)
+        for p in d2j[v][0]:
+            img = cv2.circle(img, (int(p[0]),int(p[1])), 3, (0,0,255), 10)
+        vis_img("%s/%s.jpg" %(path, view), img)
+        if save:
+            cv2.imwrite("%s/%s_%05d.jpg" %(path, view, vis_count), img)
+    vis_count += 1
+
+def vis_img(name, im):
+    ratiox = 800/int(im.shape[0])
+    ratioy = 800/int(im.shape[1])
+    if ratiox < ratioy:
+        ratio = ratiox
+    else:
+        ratio = ratioy
+
+    cv2.namedWindow(name,0)
+    cv2.resizeWindow(name,int(im.shape[1]*ratio),int(im.shape[0]*ratio))
+    # cv2.moveWindow(name,0,0)
+    if im.max() > 1:
+        im = im/255.
+    cv2.imshow(name,im)
+    # cv2.waitKey()
 
 def save_results(setting, data, result, 
                 use_vposer=True, 
