@@ -16,7 +16,7 @@ except ImportError:
     import pickle
 import cv2
 from copy import deepcopy
-
+import sys
 
 vis_count = 0
 
@@ -265,7 +265,10 @@ def project_to_img(joints, verts, faces, gt_joints, camera, image_path, viz=Fals
     if viz:
         for v in range(len(image_path)):
             img_dir = image_path[v]
-            view = img_dir.split('\\')[-2]
+            if sys.platform == 'linux':
+                view = img_dir.split('/')[-2]
+            else:
+                view = img_dir.split('\\')[-2]
             img = cv2.imread(img_dir)
             for f in faces:
                 color = 255
@@ -290,7 +293,10 @@ def visualize_fitting(joints, verts, faces, camera, image_path, save=False, path
 
     for v in range(len(image_path)):
         img_dir = image_path[v]
-        view = img_dir.split('\\')[-2]
+        if sys.platform == 'linux':
+            view = img_dir.split('/')[-2]
+        else:
+            view = img_dir.split('\\')[-2]
         img = cv2.imread(img_dir)
         for f in faces:
             color = 255

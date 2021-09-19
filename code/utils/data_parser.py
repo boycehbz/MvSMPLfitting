@@ -364,14 +364,16 @@ class FittingData(Dataset):
         joints3d = None
         for img_path in img_paths:
             img_ = cv2.imread(img_path).astype(np.float32)[:, :, ::-1] / 255.0
-            img_fn = osp.split(img_path)[1]
-            areas = osp.split(img_path)[0].split("\\")
+            areas, img_fn = osp.split(img_path)
+            if sys.platform == 'linux':
+                areas = areas.split("/")
+            else:
+                areas = areas.split("\\")
             serial = areas[-2]
             cam = areas[-1]
             img_fn, _ = osp.splitext(osp.split(img_path)[1])
 
-            keypoint_fn = osp.join(self.keyp_folder,
-                                    serial + '\\' + cam + '\\' + img_fn + '_keypoints.json')
+            keypoint_fn = osp.join(self.keyp_folder, serial, cam, img_fn + '_keypoints.json')
 
             if not os.path.exists(keypoint_fn):
                 keypoints_ = None # keypoints may not exist
