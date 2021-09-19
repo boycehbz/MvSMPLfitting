@@ -5,6 +5,7 @@ A multi-view SMPL fitting based on smplify-x
 
 ## Dependencies
 Windows or Linux, Python3
+
 ```conda install pytorch torchvision torchaudio cudatoolkit=10.2 -c pytorch```<br>
 ```pip install -r requirements.txt```
 
