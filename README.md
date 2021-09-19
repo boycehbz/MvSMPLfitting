@@ -24,6 +24,8 @@ python setup.py install
 ![interpenetration](/images/interpenetration.png)
 
 ## Reference
+If the code is helpful in your research, please consider citing the following works.
+
 ```
 @inproceedings{zhang2020object,
   title={Object-Occluded Human Shape and Pose Estimation From a Single Color Image},
