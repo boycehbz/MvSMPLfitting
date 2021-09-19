@@ -1,3 +1,10 @@
+'''
+ @FileName    : non_linear_solver.py
+ @EditTime    : 2021-09-19 21:48:01
+ @Author      : Buzhen Huang
+ @Email       : hbz@seu.edu.cn
+ @Description : 
+'''
 
 from __future__ import absolute_import
 from __future__ import print_function

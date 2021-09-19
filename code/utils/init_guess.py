@@ -1,3 +1,11 @@
+'''
+ @FileName    : init_guess.py
+ @EditTime    : 2021-09-19 21:47:56
+ @Author      : Buzhen Huang
+ @Email       : hbz@seu.edu.cn
+ @Description : 
+'''
+
 from utils.recompute3D import recompute3D
 import torch
 import numpy as np

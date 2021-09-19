@@ -1,3 +1,11 @@
+'''
+ @FileName    : recompute3D.py
+ @EditTime    : 2021-09-19 21:48:09
+ @Author      : Buzhen Huang
+ @Email       : hbz@seu.edu.cn
+ @Description : 
+'''
+
 import numpy as np
 from utils.utils import get_rot_trans
 

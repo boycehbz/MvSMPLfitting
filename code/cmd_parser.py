@@ -1,4 +1,11 @@
 # -*- coding: utf-8 -*-
+'''
+ @FileName    : cmd_parser.py
+ @EditTime    : 2021-09-19 21:48:25
+ @Author      : Buzhen Huang
+ @Email       : hbz@seu.edu.cn
+ @Description : 
+'''
 
 import sys
 import os
