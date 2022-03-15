@@ -7,7 +7,7 @@ interpenetration: false
 is_seq: false # solve a video sequence
 
 # output related
-output_folder: 'output_test'
+output_folder: 'output_test1'
 result_folder: 'results'
 visualize: False
 interactive: True

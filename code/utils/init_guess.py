@@ -105,29 +105,31 @@ def init_guess(setting, data, use_torso=False, **kwargs):
     init_r = torch.zeros((1,3), dtype=dtype)
     init_s = torch.tensor(fixed_scale, dtype=dtype)
     init_shape = torch.zeros((1,10), dtype=dtype)
-    model.reset_params(transl=init_t, global_orient=init_r, scale=init_s, betas=init_shape)
+    # model.reset_params(transl=init_t, global_orient=init_r, scale=init_s, betas=init_shape)
+    model.reset_params(transl=init_t, global_orient=init_r, betas=init_shape)
 
-    init_pose = torch.zeros((1,69), dtype=dtype).cuda()
+    init_pose = torch.zeros((1,63), dtype=dtype).cuda()
     model_output = model(return_verts=True, return_full_pose=True, body_pose=init_pose) ## joints有lsp+face组成
     verts = model_output.vertices[0]
-    if kwargs.get('model_type') == 'smpllsp':
-        J = torch.matmul(model.joint_regressor, verts)
-    else:
-        J = torch.matmul(model.J_regressor, verts)
+    joints = model_output.joints[0].detach().cpu().numpy()
+    # if kwargs.get('model_type') == 'smpllsp':
+    #     J = torch.matmul(model.joint_regressor, verts)
+    # else:
+    #     J = torch.matmul(model.J_regressor, verts)
 
-    verts = verts.unsqueeze(0)
-    J = J.unsqueeze(0)
-    joints = model.vertex_joint_selector(verts, J)
-    # Map the joints to the current dataset
-    if model.joint_mapper is not None:
-        joints = model.joint_mapper(joints).detach().cpu().numpy()[0]
+    # verts = verts.unsqueeze(0)
+    # J = J.unsqueeze(0)
+    # joints = model.vertex_joint_selector(verts, J)
+    # # Map the joints to the current dataset
+    # if model.joint_mapper is not None:
+    #     joints = model.joint_mapper(joints).detach().cpu().numpy()[0]
 
     if len(keypoints) == 1:
         # guess depth for single-view input
         # 5 is L shoulder, 11 is L hip
         # 6 is R shoulder, 12 is R hip
-        torso3d = joints[[5,6,11,12]]
-        torso2d = keypoints[0][0][[5,6,11,12]]
+        torso3d = joints[[5,2,12,9]]
+        torso2d = keypoints[0][0][[5,2,12,9]]
         torso3d = np.insert(torso3d, 3, 1, axis=1).T
         torso3d = (np.dot(setting['extris'][0], torso3d).T)[:,:3]
 
@@ -152,8 +154,8 @@ def init_guess(setting, data, use_torso=False, **kwargs):
         joints3d = data['3d_joint'][0][:,:3]
 
     if use_torso:
-        joints3d = joints3d[[5,6,11,12]]
-        joints = joints[[5,6,11,12]]
+        joints3d = joints3d[[5,2,12,9]]
+        joints = joints[[5,2,12,9]]
     # get transformation
     rot, trans, scale = umeyama(joints, joints3d, est_scale) ## 根据2d-3d估计的joints 估计初始旋转和平移
     rot = cv2.Rodrigues(rot)[0]
@@ -164,8 +166,8 @@ def init_guess(setting, data, use_torso=False, **kwargs):
         init_s = torch.tensor(fixed_scale, dtype=dtype)
     init_t = torch.tensor(trans, dtype=dtype)
     init_r = torch.tensor(rot, dtype=dtype).reshape(1,3)
-    model.reset_params(transl=init_t, global_orient=init_r, scale=init_s)
-
+    # model.reset_params(transl=init_t, global_orient=init_r, scale=init_s)
+    model.reset_params(transl=init_t, global_orient=init_r)
     if kwargs.get('use_vposer'):
         with torch.no_grad():   
             setting['pose_embedding'].fill_(0)

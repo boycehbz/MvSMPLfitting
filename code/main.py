@@ -66,11 +66,13 @@ def main(**args):
         data['keypoints'] = keyps
         print('Processing: {}'.format(data['img_path']))
 
-        # init guess
-        # if setting['seq_start'] or not args.get('is_seq'):
-        #     init_guess(setting, data, use_torso=True, **args) ## 根据2djoints->3djoints 估计初始旋转和平移
-        # else:
-        #     load_init(setting, data, results, use_torso=True, **args)
+        if setting['seq_start'] or not args.get('is_seq'):
+            init_guess(setting, data, use_torso=True, **args) ## 根据2djoints->3djoints 估计初始旋转和平移
+        else:
+            load_init(setting, data, results, use_torso=True, **args)
+
+        '''
+        smplify-x 非线性初始化
         gt_joints = torch.tensor(data['keypoints'][0][:,:,:2]).to(device=setting['device'],dtype=setting['dtype'])
         body_model = setting['model']
         init_t = guess_init(
@@ -79,7 +81,6 @@ def main(**args):
             pose_embedding=setting['pose_embedding'],
             model_type=args['model_type'],
             focal_length=setting['camera'][0].focal_length_x, dtype=setting['dtype'])
-
         from utils import fitting
         ## 补充非线性 全局变换优化
         camera_loss = fitting.create_loss('camera_init',
@@ -121,6 +122,7 @@ def main(**args):
         if args.get('use_vposer'):
             with torch.no_grad():   
                 setting['pose_embedding'].fill_(0)
+        '''
 
         fix_params(setting, scale=setting['fixed_scale'], shape=setting['fixed_shape']) ## 设置第一步初始化的全局旋转平移，选择是否优化scale和shape
         # linear solve
@@ -129,7 +131,7 @@ def main(**args):
         results = non_linear_solver(setting, data, **args)
         # save results
         save_results(setting, data, results, **args)
-
+        
     elapsed = time.time() - start
     time_msg = time.strftime('%H hours, %M minutes, %S seconds',
                              time.gmtime(elapsed))
