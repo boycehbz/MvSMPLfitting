@@ -177,9 +177,9 @@ def parse_config(argv=None):
     #                     ' result')
 
 
-    # parser.add_argument('--joints_to_ign', default=-1, type=int,
-    #                     nargs='*',
-    #                     help='Indices of joints to be ignored')
+    parser.add_argument('--joints_to_ign', default=-1, type=int,
+                        nargs='*',
+                        help='Indices of joints to be ignored')
 
     # parser.add_argument('--img_folder', type=str, default='images',
     #                     help='The folder where the images are stored')

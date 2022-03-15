@@ -29,18 +29,18 @@ from .utils import to_tensor
 class VertexJointSelector(nn.Module):
 
     def __init__(self, vertex_ids=None,
-                 use_hands=False,
-                 use_feet_keypoints=False, **kwargs):
+                 use_hands=True,
+                 use_feet_keypoints=True, **kwargs):
         super(VertexJointSelector, self).__init__()
 
         extra_joints_idxs = []
 
         face_keyp_idxs = np.array([
             vertex_ids['nose'],
-            vertex_ids['leye'],
             vertex_ids['reye'],
-            vertex_ids['lear'],
-            vertex_ids['rear']], dtype=np.int64)
+            vertex_ids['leye'],
+            vertex_ids['rear'],
+            vertex_ids['lear']], dtype=np.int64)
 
         extra_joints_idxs = np.concatenate([extra_joints_idxs,
                                             face_keyp_idxs])

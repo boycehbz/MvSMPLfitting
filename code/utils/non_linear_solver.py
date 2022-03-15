@@ -60,7 +60,7 @@ def non_linear_solver(
     dtype = setting['dtype']
     vposer = setting['vposer']
     keypoints = data['keypoints']
-    joint_weights = setting['joints_weight']
+    joint_weights = setting['joints_weight'] # 17
     model = setting['model']
     camera = setting['camera']
     pose_embedding = setting['pose_embedding']
@@ -83,7 +83,7 @@ def non_linear_solver(
             conf = conf.to(device=device, dtype=dtype)
             joints_conf.append(conf)
 
-    if use_3d: #:
+    if use_3d: ## 估计的3djoint只用于估计初始旋转和平移
         joints3d = data['3d_joint'][0]
         joints_data = torch.tensor(joints3d, dtype=dtype)
         gt_joints3d = joints_data[:, :3]
@@ -105,6 +105,7 @@ def non_linear_solver(
     pen_distance = None
     filter_faces = None
     # we do not use this term at this time
+    ## 自穿模约束
     # if interpenetration:
     #     from mesh_intersection.bvh_search_tree import BVH
     #     import mesh_intersection.loss as collisions_loss
@@ -135,7 +136,7 @@ def non_linear_solver(
         #         faces_segm=faces_segm, faces_parents=faces_parents,
         #         ign_part_pairs=ign_part_pairs).to(device=device)
 
-    # Weights used for the pose prior and the shape prior
+    # Weights used for the pose prior and the shape prior ## 四轮约束吗？
     opt_weights_dict = {'data_weight': data_weights,
                         'body_pose_weight': body_pose_prior_weights,
                         'shape_weight': shape_weights}
@@ -216,13 +217,20 @@ def non_linear_solver(
             elif opt_idx == 2:
                 curr_weights['body_pose_weight'] *= 0.15
 
-        body_params = list(model.parameters())
+        body_params = list(model.parameters()) # shape + t + r + s
+
+        print("--------------------------------")
+        for name,param in model.named_parameters():
+            print(name)
+            print(param.shape)
+            print(param.requires_grad)
+            print("---------------------------------")
 
         final_params = list(
             filter(lambda x: x.requires_grad, body_params))
 
         if vposer is not None:
-            final_params.append(pose_embedding)
+            final_params.append(pose_embedding) # shape + t + r + s + vp
 
         body_optimizer, body_create_graph = optim_factory.create_optimizer(
             final_params,

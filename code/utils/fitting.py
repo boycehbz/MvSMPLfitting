@@ -161,10 +161,11 @@ class FittingMonitor():
             if backward:
                 optimizer.zero_grad()
 
-            body_pose = vposer.decode(
-                pose_embedding, output_type='aa').view(
-                    1, -1) if use_vposer else None
-
+            # body_pose = vposer.decode(
+            #     pose_embedding, output_type='aa').view(
+            #         1, -1) if use_vposer else None
+            body_pose = vposer.forward(
+                pose_embedding).view(1,-1) if use_vposer else None
             if append_wrists:
                 wrist_pose = torch.zeros([body_pose.shape[0], 6],
                                          dtype=body_pose.dtype,
@@ -205,6 +206,8 @@ class FittingMonitor():
 def create_loss(loss_type='smplify', **kwargs):
     if loss_type == 'smplify':
         return SMPLifyLoss(**kwargs)
+    elif loss_type == 'camera_init':
+        return SMPLifyCameraInitLoss(**kwargs)
     else:
         raise ValueError('Unknown loss type: {}'.format(loss_type))
 
@@ -404,3 +407,67 @@ class SMPLifyLoss(nn.Module):
         total_loss = (joint_loss + joints3d_loss + pprior_loss + shape_loss +
                       angle_prior_loss + pen_loss)
         return total_loss
+
+
+class SMPLifyCameraInitLoss(nn.Module):
+
+    def __init__(self, init_joints_idxs, trans_estimation=None,
+                 reduction='sum',
+                 data_weight=1.0,
+                 depth_loss_weight=1e2,
+                 camera_mode='moving',
+                 dtype=torch.float32,
+                 **kwargs):
+        super(SMPLifyCameraInitLoss, self).__init__()
+        self.dtype = dtype
+        self.camera_mode = camera_mode
+
+        if trans_estimation is not None:
+            self.register_buffer(
+                'trans_estimation',
+                utils.to_tensor(trans_estimation, dtype=dtype))
+        else:
+            self.trans_estimation = trans_estimation
+
+        self.register_buffer('data_weight',
+                             torch.tensor(data_weight, dtype=dtype))
+        self.register_buffer(
+            'init_joints_idxs',
+            utils.to_tensor(init_joints_idxs, dtype=torch.long))
+        self.register_buffer('depth_loss_weight',
+                             torch.tensor(depth_loss_weight, dtype=dtype))
+
+    def reset_loss_weights(self, loss_weight_dict):
+        for key in loss_weight_dict:
+            if hasattr(self, key):
+                weight_tensor = getattr(self, key)
+                weight_tensor = torch.tensor(loss_weight_dict[key],
+                                             dtype=weight_tensor.dtype,
+                                             device=weight_tensor.device)
+                setattr(self, key, weight_tensor)
+
+    def forward(self, body_model_output, camera, gt_joints, body_model,
+                **kwargs):
+
+        projected_joints = camera(body_model_output.joints)
+
+        joint_error = torch.pow(
+            torch.index_select(gt_joints, 1, self.init_joints_idxs) -
+            torch.index_select(projected_joints, 1, self.init_joints_idxs),
+            2)
+        joint_loss = torch.sum(joint_error) * self.data_weight ** 2
+
+        depth_loss = 0.0
+        if (self.depth_loss_weight.item() > 0 and self.trans_estimation is not
+                None):
+            if self.camera_mode == 'moving':
+                depth_loss = self.depth_loss_weight ** 2 * torch.sum((
+                                                                             camera.translation[:,
+                                                                             2] - self.trans_estimation[:, 2]).pow(2))
+            elif self.camera_mode == 'fixed':
+                depth_loss = self.depth_loss_weight ** 2 * torch.sum((
+                    body_model.transl[:, 2] - self.trans_estimation[:, 2]).pow(2))
+
+
+
+        return joint_loss + depth_loss

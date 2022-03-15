@@ -27,6 +27,12 @@ import sys
 
 vis_count = 0
 
+def to_tensor(tensor, dtype=torch.float32):
+    if torch.Tensor == type(tensor):
+        return tensor.clone().detach()
+    else:
+        return torch.tensor(tensor,dtype)
+
 def estimate_translation_from_intri(S, joints_2d, joints_conf, fx=5000., fy=5000., cx=128., cy=128.):
     num_joints = S.shape[0]
     # focal length
@@ -253,11 +259,54 @@ def smpl_to_annotation(model_type='smpl', use_hands=False, use_face=False,
             #lsp order: Nose Leye Reye Lear Rear LS RS LE RE LW RW LH RH LK RK LA RA
             return np.array([14, 15, 16, 17, 18, 9, 8, 10, 7, 11, 6, 3,
                              2, 4, 1, 5, 0],
+                            dtype=np.int32) ## 这里的joint顺序指代什么
+        else:
+            raise ValueError('Unknown model type: {}'.format(model_type))
+    elif pose_format == 'coco25':
+        if model_type == 'smpl':
+            return np.array([24, 12, 17, 19, 21, 16, 18, 20, 0, 2, 5, 8, 1, 4,
+                             7, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34],
                             dtype=np.int32)
+        elif model_type == 'smplh':
+            body_mapping = np.array([52, 12, 17, 19, 21, 16, 18, 20, 0, 2, 5,
+                                     8, 1, 4, 7, 53, 54, 55, 56, 57, 58, 59,
+                                     60, 61, 62], dtype=np.int32)
+            mapping = [body_mapping]
+            if use_hands:
+                lhand_mapping = np.array([20, 34, 35, 36, 63, 22, 23, 24, 64,
+                                          25, 26, 27, 65, 31, 32, 33, 66, 28,
+                                          29, 30, 67], dtype=np.int32)
+                rhand_mapping = np.array([21, 49, 50, 51, 68, 37, 38, 39, 69,
+                                          40, 41, 42, 70, 46, 47, 48, 71, 43,
+                                          44, 45, 72], dtype=np.int32)
+                mapping += [lhand_mapping, rhand_mapping]
+            return np.concatenate(mapping)
+        # SMPLX
+        elif model_type == 'smplx':
+            body_mapping = np.array([55, 12, 17, 19, 21, 16, 18, 20, 0, 2, 5,
+                                     8, 1, 4, 7, 56, 57, 58, 59, 60, 61, 62,
+                                     63, 64, 65], dtype=np.int32)
+            mapping = [body_mapping]
+            if use_hands:
+                lhand_mapping = np.array([20, 37, 38, 39, 66, 25, 26, 27,
+                                          67, 28, 29, 30, 68, 34, 35, 36, 69,
+                                          31, 32, 33, 70], dtype=np.int32)
+                rhand_mapping = np.array([21, 52, 53, 54, 71, 40, 41, 42, 72,
+                                          43, 44, 45, 73, 49, 50, 51, 74, 46,
+                                          47, 48, 75], dtype=np.int32)
+
+                mapping += [lhand_mapping, rhand_mapping]
+            if use_face:
+                #  end_idx = 127 + 17 * use_face_contour
+                face_mapping = np.arange(76, 127 + 17 * use_face_contour,
+                                         dtype=np.int32)
+                mapping += [face_mapping]
+
+            return np.concatenate(mapping)
         else:
             raise ValueError('Unknown model type: {}'.format(model_type))
     else:
-        raise ValueError('Unknown joint format: {}'.format(openpose_format))
+        raise ValueError('Unknown joint format: {}'.format(pose_format))
 
 def project_to_img(joints, verts, faces, gt_joints, camera, image_path, viz=False, path=None):
 
@@ -348,9 +397,10 @@ def save_results(setting, data, result,
 
     if use_vposer:
         pose_embedding = result['pose_embedding']
-        body_pose = vposer.decode(
-                pose_embedding, output_type='aa').view(1, -1) if use_vposer else None
-
+        # body_pose = vposer.decode(
+        #         pose_embedding, output_type='aa').view(1, -1) if use_vposer else None
+        body_pose = vposer.forward(
+                pose_embedding).view(1,-1) if use_vposer else None
         # the parameters of foot and hand are from vposer
         # we do not use this inaccurate results
         if True:

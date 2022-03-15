@@ -272,7 +272,7 @@ def read_joints(keypoint_fn, use_hands=True, use_face=True,
 
 class FittingData(Dataset):
 
-    NUM_BODY_JOINTS = 17
+    NUM_BODY_JOINTS = 25
     NUM_HAND_JOINTS = 20
 
     def __init__(self, data_folder, img_folder='images',
@@ -295,7 +295,7 @@ class FittingData(Dataset):
         self.dtype = dtype
         self.use_3d = use_3d
         self.use_hip = use_hip
-        self.joints_to_ign = joints_to_ign
+        self.joints_to_ign = joints_to_ign ## 需要更改
         self.use_face_contour = use_face_contour
 
         self.pose_format = pose_format
@@ -308,20 +308,20 @@ class FittingData(Dataset):
 
         img_serials = sorted(os.listdir(self.img_folder))
         self.img_paths = []
-        for i_s in img_serials:
+        for i_s in img_serials: ## 序列文件夹
             i_s_dir = osp.join(self.img_folder, i_s)
             img_cameras = sorted(os.listdir(i_s_dir))
             this_serials = []
-            for i_cam in img_cameras:
+            for i_cam in img_cameras: ## 多视角相机文件夹
                 i_c_dir = osp.join(i_s_dir, i_cam)
                 cam_imgs = [osp.join(i_c_dir, img_fn)
                             for img_fn in os.listdir(i_c_dir)
                             if img_fn.endswith('.png') or
                             img_fn.endswith('.jpg') and
-                            not img_fn.startswith('.')]
+                            not img_fn.startswith('.')] ## 序列-相机-每帧
                 cam_imgs = sorted(cam_imgs)
                 this_serials.append(cam_imgs)
-            self.img_paths.append(this_serials)
+            self.img_paths.append(this_serials) ## n_s * n_c * n_i
 
         self.cnt = 0
         self.serial_cnt = 0
@@ -349,12 +349,12 @@ class FittingData(Dataset):
         # These joints are ignored because SMPL has no neck joint and the
         # annotation of the hips is ambiguous.
         
-        # if self.joints_to_ign is not None and -1 not in self.joints_to_ign:
-        #     optim_weights[self.joints_to_ign] = 0.
+        if self.joints_to_ign is not None and -1 not in self.joints_to_ign:
+            optim_weights[self.joints_to_ign] = 0.
         # return torch.tensor(optim_weights, dtype=self.dtype)
-        if self.pose_format != 'lsp14' or not self.use_hip:
-            optim_weights[11] = 0.
-            optim_weights[12] = 0.
+        # if self.pose_format != 'lsp14' or not self.use_hip:
+        #     optim_weights[11] = 0.
+        #     optim_weights[12] = 0.
         return torch.tensor(optim_weights, dtype=self.dtype)
 
 

@@ -18,7 +18,7 @@ import smplx
 from camera import create_camera
 from prior import create_prior
 from utils.prior import load_vposer
-
+from vposer.vposer import VPoserDecoder
 def init(**kwarg):
 
     setting = {}
@@ -63,8 +63,10 @@ def init(**kwarg):
     if model_type == 'smpllsp':
         # the hip joint of smpl is different with 2D annotation predicted by openpose/alphapose, so we use smpl-lsp model to replace
         pose_format = 'lsp14' 
-    else:
+    elif model_type == 'smpl':
         pose_format = 'coco17'
+    elif model_type == 'smplx':
+        pose_format = 'coco25'
 
     dataset_obj = create_dataset(pose_format=pose_format, **kwarg)
 
@@ -84,18 +86,19 @@ def init(**kwarg):
                         create_global_orient=True,
                         create_body_pose=not kwarg.get('use_vposer'),
                         create_betas=True,
-                        create_left_hand_pose=False,
-                        create_right_hand_pose=False,
-                        create_expression=False,
-                        create_jaw_pose=False,
-                        create_leye_pose=False,
-                        create_reye_pose=False,
+                        create_left_hand_pose=True,
+                        create_right_hand_pose=True,
+                        create_expression=True,
+                        create_jaw_pose=True,
+                        create_leye_pose=True,
+                        create_reye_pose=True,
                         create_transl=True, #set transl in multi-view task  --Buzhen Huang 07/31/2019
-                        create_scale=True,
+                        create_scale=False,
                         dtype=dtype,
                         **kwarg)
 
-    model = smplx.create_scale(gender=input_gender, **model_params)
+    model = smplx.create(gender=input_gender,**model_params) ## JointMapper 由 smpl 类自行映射
+    # model = smplx.create_scale(gender=input_gender, **model_params) ## 多了 lsp 以及 scale 参数
 
     # load camera parameters
     cam_params = kwarg.pop('cam_param')
@@ -118,17 +121,17 @@ def init(**kwarg):
                             rotation=rotate,
                             center=center,
                             dtype=dtype,
-                            **kwarg)
-        camera.append(camera_t)
+                            **kwarg) ## 相机外参和内参投影
+        camera.append(camera_t) # n_c
 
     # fix rotation and translation of camera
-    for cam in camera:
+    for cam in camera: ## 不优化外参
         if hasattr(cam, 'rotation'):
             cam.rotation.requires_grad = False
         if hasattr(cam, 'translation'):
             cam.translation.requires_grad = False
 
-    # create prior
+    # create prior ## 定义损失函数
     body_pose_prior = create_prior(
         prior_type=kwarg.get('body_prior_type'),
         dtype=dtype,
@@ -136,7 +139,7 @@ def init(**kwarg):
     shape_prior = create_prior(
         prior_type=kwarg.get('shape_prior_type', 'l2'),
         dtype=dtype, **kwarg)
-    angle_prior = create_prior(prior_type='angle', dtype=dtype)
+    angle_prior = create_prior(prior_type='angle', dtype=dtype) ## 轴角表示中每个维度和xyz轴转动角度有啥关系？
 
     if use_cuda and torch.cuda.is_available():
         device = torch.device('cuda')
@@ -150,7 +153,7 @@ def init(**kwarg):
     else:
         device = torch.device('cpu')
     
-    # A weight for every joint of the model
+    # A weight for every joint of the model ## ignore neck lhip rhip
     joint_weights = dataset_obj.get_joint_weights().to(device=device,
                                                        dtype=dtype)
     # Add a fake batch dimension for broadcasting
@@ -160,9 +163,17 @@ def init(**kwarg):
     vposer = None
     pose_embedding = None
     batch_size = 1
+    # if kwarg.get('use_vposer'):
+    #     vposer_ckpt = osp.expandvars(kwarg.get('prior_folder'))
+    #     vposer = load_vposer(vposer_ckpt, vp_model='snapshot')
+    #     vposer = vposer.to(device=device)
+    #     vposer.eval()
+    #     pose_embedding = torch.zeros([batch_size, 32],
+    #                                  dtype=dtype, device=device,
+    #                                  requires_grad=True)
     if kwarg.get('use_vposer'):
         vposer_ckpt = osp.expandvars(kwarg.get('prior_folder'))
-        vposer = load_vposer(vposer_ckpt, vp_model='snapshot')
+        vposer = VPoserDecoder(vposer_ckpt=vposer_ckpt,latent_dim=32,dtype=dtype,**kwarg)
         vposer = vposer.to(device=device)
         vposer.eval()
         pose_embedding = torch.zeros([batch_size, 32],
@@ -180,6 +191,7 @@ def init(**kwarg):
     else:
         setting['fixed_shape'] = None
 
+    model.reset_params()
     # return setting
     setting['use_3d'] = kwarg.pop("use_3d")
     setting['extrinsics'] = extris

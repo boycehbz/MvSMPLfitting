@@ -14,6 +14,82 @@ import cv2
 from collections import defaultdict
 from utils.utils import cal_trans
 
+def guess_init(model,
+               joints_2d,
+               edge_idxs,
+               focal_length=5000,
+               pose_embedding=None,
+               vposer=None,
+               use_vposer=True,
+               dtype=torch.float32,
+               model_type='smpl',
+               **kwargs):
+    ''' Initializes the camera translation vector
+
+        Parameters
+        ----------
+        model: nn.Module
+            The PyTorch module of the body
+        joints_2d: torch.tensor 1xJx2
+            The 2D tensor of the joints
+        edge_idxs: list of lists
+            A list of pairs, each of which represents a limb used to estimate
+            the camera translation
+        focal_length: float, optional (default = 5000)
+            The focal length of the camera
+        pose_embedding: torch.tensor 1x32
+            The tensor that contains the embedding of V-Poser that is used to
+            generate the pose of the model
+        dtype: torch.dtype, optional (torch.float32)
+            The floating point type used
+        vposer: nn.Module, optional (None)
+            The PyTorch module that implements the V-Poser decoder
+        Returns
+        -------
+        init_t: torch.tensor 1x3, dtype = torch.float32
+            The vector with the estimated camera location
+
+    '''
+    
+    # body_pose = vposer.decode(
+    #     pose_embedding, output_type='aa').view(1, -1) if use_vposer else None
+    body_pose = vposer.forward(
+        pose_embedding).view(1,-1) if use_vposer else None
+    if use_vposer and model_type == 'smpl':
+        wrist_pose = torch.zeros([body_pose.shape[0], 6],
+                                 dtype=body_pose.dtype,
+                                 device=body_pose.device)
+        body_pose = torch.cat([body_pose, wrist_pose], dim=1)
+    model.reset_params()
+    output = model(body_pose=body_pose, return_verts=False,
+                   return_full_pose=False)
+    joints_3d = output.joints
+    joints_2d = joints_2d.to(device=joints_3d.device)
+
+    diff3d = []
+    diff2d = []
+    for edge in edge_idxs:
+        diff3d.append(joints_3d[:, edge[0]] - joints_3d[:, edge[1]])
+        diff2d.append(joints_2d[:, edge[0]] - joints_2d[:, edge[1]])
+
+    diff3d = torch.stack(diff3d, dim=1)
+    diff2d = torch.stack(diff2d, dim=1)
+
+    length_2d = diff2d.pow(2).sum(dim=-1).sqrt()
+    length_3d = diff3d.pow(2).sum(dim=-1).sqrt()
+
+    height2d = length_2d.mean(dim=1)
+    height3d = length_3d.mean(dim=1)
+
+    est_d = focal_length * (height3d / height2d)
+
+    # just set the z value
+    batch_size = joints_3d.shape[0]
+    x_coord = torch.zeros([batch_size], device=joints_3d.device,
+                          dtype=dtype)
+    y_coord = x_coord.clone()
+    init_t = torch.stack([x_coord, y_coord, est_d], dim=1)
+    return init_t
 
 def init_guess(setting, data, use_torso=False, **kwargs):
     model = setting['model']
@@ -32,7 +108,7 @@ def init_guess(setting, data, use_torso=False, **kwargs):
     model.reset_params(transl=init_t, global_orient=init_r, scale=init_s, betas=init_shape)
 
     init_pose = torch.zeros((1,69), dtype=dtype).cuda()
-    model_output = model(return_verts=True, return_full_pose=True, body_pose=init_pose)
+    model_output = model(return_verts=True, return_full_pose=True, body_pose=init_pose) ## joints有lsp+face组成
     verts = model_output.vertices[0]
     if kwargs.get('model_type') == 'smpllsp':
         J = torch.matmul(model.joint_regressor, verts)
@@ -79,7 +155,7 @@ def init_guess(setting, data, use_torso=False, **kwargs):
         joints3d = joints3d[[5,6,11,12]]
         joints = joints[[5,6,11,12]]
     # get transformation
-    rot, trans, scale = umeyama(joints, joints3d, est_scale)
+    rot, trans, scale = umeyama(joints, joints3d, est_scale) ## 根据2d-3d估计的joints 估计初始旋转和平移
     rot = cv2.Rodrigues(rot)[0]
     # apply to model
     if est_scale:
@@ -173,13 +249,14 @@ def fix_params(setting, scale=None, shape=None):
     model = setting['model']
     init_t = model.transl
     init_r = model.global_orient
-    init_s = model.scale
+    # init_s = model.scale
     init_shape = model.betas
-    if scale is not None:
-        init_s = torch.tensor(scale, dtype=dtype)
-        model.scale.requires_grad = False
+    # if scale is not None:
+    #     init_s = torch.tensor(scale, dtype=dtype)
+    #     model.scale.requires_grad = False
     if shape is not None:
         init_shape = torch.tensor(shape, dtype=dtype)
         model.betas.requires_grad = False
-    model.reset_params(transl=init_t, global_orient=init_r, scale=init_s, betas=init_shape)
+    model.reset_params(transl=init_t, global_orient=init_r, betas=init_shape)    
+    # model.reset_params(transl=init_t, global_orient=init_r, scale=init_s, betas=init_shape)
         

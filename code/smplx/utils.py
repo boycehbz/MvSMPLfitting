@@ -14,16 +14,94 @@
 #
 # Contact: ps-license@tuebingen.mpg.de
 
-from __future__ import print_function
-from __future__ import absolute_import
-from __future__ import division
-
+from typing import NewType, Union, Optional
+from dataclasses import dataclass, asdict, fields
 import numpy as np
 import torch
 
+Tensor = NewType('Tensor', torch.Tensor)
+Array = NewType('Array', np.ndarray)
 
-def to_tensor(array, dtype=torch.float32):
-    if 'torch.tensor' not in str(type(array)):
+
+@dataclass
+class ModelOutput:
+    vertices: Optional[Tensor] = None
+    joints: Optional[Tensor] = None
+    full_pose: Optional[Tensor] = None
+    global_orient: Optional[Tensor] = None
+    transl: Optional[Tensor] = None
+    v_shaped: Optional[Tensor] = None
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def get(self, key, default=None):
+        return getattr(self, key, default)
+
+    def __iter__(self):
+        return self.keys()
+
+    def keys(self):
+        keys = [t.name for t in fields(self)]
+        return iter(keys)
+
+    def values(self):
+        values = [getattr(self, t.name) for t in fields(self)]
+        return iter(values)
+
+    def items(self):
+        data = [(t.name, getattr(self, t.name)) for t in fields(self)]
+        return iter(data)
+
+
+@dataclass
+class SMPLOutput(ModelOutput):
+    betas: Optional[Tensor] = None
+    body_pose: Optional[Tensor] = None
+
+
+@dataclass
+class SMPLHOutput(SMPLOutput):
+    left_hand_pose: Optional[Tensor] = None
+    right_hand_pose: Optional[Tensor] = None
+    transl: Optional[Tensor] = None
+
+
+@dataclass
+class SMPLXOutput(SMPLHOutput):
+    expression: Optional[Tensor] = None
+    jaw_pose: Optional[Tensor] = None
+
+
+@dataclass
+class MANOOutput(ModelOutput):
+    betas: Optional[Tensor] = None
+    hand_pose: Optional[Tensor] = None
+
+
+@dataclass
+class FLAMEOutput(ModelOutput):
+    betas: Optional[Tensor] = None
+    expression: Optional[Tensor] = None
+    jaw_pose: Optional[Tensor] = None
+    neck_pose: Optional[Tensor] = None
+
+
+def find_joint_kin_chain(joint_id, kinematic_tree):
+    kin_chain = []
+    curr_idx = joint_id
+    while curr_idx != -1:
+        kin_chain.append(curr_idx)
+        curr_idx = kinematic_tree[curr_idx]
+    return kin_chain
+
+
+def to_tensor(
+        array: Union[Array, Tensor], dtype=torch.float32
+) -> Tensor:
+    if torch.is_tensor(array):
+        return array
+    else:
         return torch.tensor(array, dtype=dtype)
 
 
