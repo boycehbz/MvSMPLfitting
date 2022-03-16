@@ -7,7 +7,7 @@ interpenetration: false
 is_seq: false # solve a video sequence
 
 # output related
-output_folder: 'output_test1'
+output_folder: 'output_Linear_hand_face'
 result_folder: 'results'
 visualize: False
 interactive: True
@@ -31,11 +31,18 @@ model_folder: 'models'
 model_type: 'smplx' # smpl smpllsp
 float_dtype: "float32"
 gender: male # male female neutral
+use_hand: true
+use_face: true
 
 #prior related
 use_vposer: true
 prior_folder: 'priors/vposerDecoderWeights.npz'
 body_prior_type: 'l2'
+left_hand_prior_type: 'l2'
+right_hand_prior_type: 'l2'
+jaw_prior_type: 'l2'
+# expr_prior_type: 'l2'
+num_pca_comps: 12
 
 #weight related
 data_weights:
@@ -58,6 +65,35 @@ coll_loss_weights:
     - 0.0
     - 1000.0
     - 4500.0
+expr_weights:
+    - 1.0e2
+    - 5.0e1
+    - 1.0e1
+    - 0.5e1
+hand_pose_prior_weights:
+    - 4.04e2
+    - 4.04e2
+    - 57.4
+    - 4.78
+jaw_pose_prior_weights:
+    # First phase
+    - 4.04e03,4.04e04,4.04e04
+    # Second phase
+    - 4.04e03,4.04e04,4.04e04
+    # Third phase
+    - 574,5740,5740
+    # Fourth phase
+    - 47.8,478,478
+hand_joints_weights:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.1
+face_joints_weights:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 2.0
 
 # optimization related
 rho: 100

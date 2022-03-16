@@ -19,6 +19,7 @@ from camera import create_camera
 from prior import create_prior
 from utils.prior import load_vposer
 from vposer.vposer import VPoserDecoder
+
 def init(**kwarg):
 
     setting = {}
@@ -141,6 +142,37 @@ def init(**kwarg):
         dtype=dtype, **kwarg)
     angle_prior = create_prior(prior_type='angle', dtype=dtype) ## 轴角表示中每个维度和xyz轴转动角度有啥关系？
 
+    use_hands = kwarg.get('use_hands', True)
+    use_face = kwarg.get('use_face', True)
+    jaw_prior, expr_prior = None, None
+    if use_face:
+        jaw_prior = create_prior(
+            prior_type=kwarg.get('jaw_prior_type'),
+            dtype=dtype,
+            **kwarg)
+        expr_prior = create_prior(
+            prior_type=kwarg.get('expr_prior_type', 'l2'),
+            dtype=dtype, **kwarg)
+
+    left_hand_prior, right_hand_prior = None, None
+    if use_hands:
+        lhand_args = kwarg.copy()
+        lhand_args['num_gaussians'] = kwarg.get('num_pca_comps')
+        left_hand_prior = create_prior(
+            prior_type=kwarg.get('left_hand_prior_type'),
+            dtype=dtype,
+            use_left_hand=True,
+            **lhand_args)
+
+        rhand_args = kwarg.copy()
+        rhand_args['num_gaussians'] = kwarg.get('num_pca_comps')
+        right_hand_prior = create_prior(
+            prior_type=kwarg.get('right_hand_prior_type'),
+            dtype=dtype,
+            use_right_hand=True,
+            **rhand_args)
+
+
     if use_cuda and torch.cuda.is_available():
         device = torch.device('cuda')
 
@@ -150,6 +182,12 @@ def init(**kwarg):
         body_pose_prior = body_pose_prior.to(device=device)
         angle_prior = angle_prior.to(device=device)
         shape_prior = shape_prior.to(device=device)
+        if use_face:
+            expr_prior = expr_prior.to(device=device)
+            jaw_prior = jaw_prior.to(device=device)
+        if use_hands:
+            left_hand_prior = left_hand_prior.to(device=device)
+            right_hand_prior = right_hand_prior.to(device=device)
     else:
         device = torch.device('cpu')
     
@@ -204,6 +242,12 @@ def init(**kwarg):
     setting['body_pose_prior'] = body_pose_prior
     setting['shape_prior'] = shape_prior
     setting['angle_prior'] = angle_prior
+    setting['expr_prior'] = expr_prior
+    setting['jaw_prior'] = jaw_prior
+    setting['left_hand_prior'] = left_hand_prior
+    setting['right_hand_prior'] = right_hand_prior
+    setting['use_hands'] = use_hands
+    setting['use_face'] = use_face
     setting['cameras'] = camera
     setting['img_folder'] = out_img_folder
     setting['result_folder'] = result_folder

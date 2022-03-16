@@ -40,6 +40,13 @@ def non_linear_solver(
                     batch_size=1,
                     data_weights=None,
                     body_pose_prior_weights=None,
+                    hand_pose_prior_weights=None,
+                    jaw_pose_prior_weights=None,
+                    face_joints_weights=None,
+                    hand_joints_weights=None,
+                    expr_weights=None,
+                    use_face=True,
+                    use_hands=True,
                     shape_weights=None,
                     coll_loss_weights=None,
                     use_joints_conf=False,
@@ -104,42 +111,21 @@ def non_linear_solver(
     search_tree = None
     pen_distance = None
     filter_faces = None
-    # we do not use this term at this time
-    ## 自穿模约束
-    # if interpenetration:
-    #     from mesh_intersection.bvh_search_tree import BVH
-    #     import mesh_intersection.loss as collisions_loss
-    #     from mesh_intersection.filter_faces import FilterFaces
-
-    #     assert use_cuda, 'Interpenetration term can only be used with CUDA'
-    #     assert torch.cuda.is_available(), \
-    #         'No CUDA Device! Interpenetration term can only be used' + \
-    #         ' with CUDA'
-
-    #     search_tree = BVH(max_collisions=max_collisions)
-
-    #     pen_distance = \
-    #         collisions_loss.DistanceFieldPenetrationLoss(
-    #             sigma=df_cone_height, point2plane=point2plane,
-    #             vectorized=True, penalize_outside=penalize_outside)
-
-        # if part_segm_fn:
-        #     # Read the part segmentation
-        #     part_segm_fn = os.path.expandvars(part_segm_fn)
-        #     with open(part_segm_fn, 'rb') as faces_parents_file:
-        #         face_segm_data = pickle.load(faces_parents_file,
-        #                                      encoding='latin1')
-        #     faces_segm = face_segm_data['segm']
-        #     faces_parents = face_segm_data['parents']
-        #     # Create the module used to filter invalid collision pairs
-        #     filter_faces = FilterFaces(
-        #         faces_segm=faces_segm, faces_parents=faces_parents,
-        #         ign_part_pairs=ign_part_pairs).to(device=device)
 
     # Weights used for the pose prior and the shape prior ## 四轮约束吗？
     opt_weights_dict = {'data_weight': data_weights,
                         'body_pose_weight': body_pose_prior_weights,
                         'shape_weight': shape_weights}
+    if use_face:
+        jaw_pose_prior_weights = map(lambda x: map(float, x.split(',')), jaw_pose_prior_weights)
+        jaw_pose_prior_weights = [list(w) for w in jaw_pose_prior_weights]
+        opt_weights_dict['face_weight'] = face_joints_weights
+        opt_weights_dict['expr_prior_weight'] = expr_weights
+        opt_weights_dict['jaw_prior_weight'] = jaw_pose_prior_weights
+    if use_hands:
+        opt_weights_dict['hand_weight'] = hand_joints_weights
+        opt_weights_dict['hand_prior_weight'] = hand_pose_prior_weights
+
     if interpenetration:
         opt_weights_dict['coll_loss_weight'] = coll_loss_weights
 
@@ -164,6 +150,10 @@ def non_linear_solver(
                                body_pose_prior=setting['body_pose_prior'],
                                shape_prior=setting['shape_prior'],
                                angle_prior=setting['angle_prior'],
+                               left_hand_prior=setting['left_hand_prior'],
+                               right_hand_prior=setting['left_hand_prior'],
+                               expr_prior=setting['expr_prior'],
+                               jaw_prior=setting['jaw_prior'],
                                interpenetration=interpenetration,
                                pen_distance=pen_distance,
                                search_tree=search_tree,
@@ -240,6 +230,12 @@ def non_linear_solver(
         curr_weights['data_weight'] = data_weight
         curr_weights['bending_prior_weight'] = (
             3.17 * curr_weights['body_pose_weight'])
+        if use_hands:
+            joint_weights[:, 25:76] = curr_weights['hand_weight']
+        if use_face:
+            joint_weights[:, 76:] = curr_weights['face_weight']
+
+        
         loss.reset_loss_weights(curr_weights)
 
         closure = monitor.create_fitting_closure(

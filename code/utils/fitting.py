@@ -175,7 +175,7 @@ class FittingMonitor():
             body_model_output = body_model(return_verts=return_verts,
                                            body_pose=body_pose,
                                            return_full_pose=return_full_pose)
-            total_loss = loss(body_model_output, camera=camera,                         body_model=body_model,
+            total_loss = loss(body_model_output, camera=camera, body_model=body_model,
                              gt_joints=gt_joints,
                               body_model_faces=faces_tensor,
                               joints_conf=joints_conf,
@@ -211,7 +211,259 @@ def create_loss(loss_type='smplify', **kwargs):
     else:
         raise ValueError('Unknown loss type: {}'.format(loss_type))
 
+class SMPLifyLoss(nn.Module):
 
+    def __init__(self, search_tree=None,
+                 pen_distance=None, tri_filtering_module=None,
+                 rho=100,
+                 body_pose_prior=None,
+                 shape_prior=None,
+                 angle_prior=None,
+
+                 expr_prior=None,
+                 jaw_prior=None,
+                 left_hand_prior=None, right_hand_prior=None,
+                 hand_prior_weight=0.0,
+                 expr_prior_weight=0.0, jaw_prior_weight=0.0,
+                 use_face=True, use_hands=True,
+
+                 use_joints_conf=True,
+                 interpenetration=True, dtype=torch.float32,
+                 data_weight=1.0,
+                 body_pose_weight=0.0,
+                 shape_weight=0.0,
+                 bending_prior_weight=0.0,
+                 coll_loss_weight=0.0,
+                 reduction='sum',
+                 use_3d=False,
+                 **kwargs):
+
+        super(SMPLifyLoss, self).__init__()
+
+        self.use_joints_conf = use_joints_conf
+        self.angle_prior = angle_prior
+        
+        self.use_3d = use_3d
+
+        self.robustifier = utils.GMoF(rho=rho)
+        self.rho = rho
+
+        self.body_pose_prior = body_pose_prior
+
+        self.shape_prior = shape_prior
+
+        self.fix_shape = kwargs.get('fix_shape')
+
+        self.interpenetration = interpenetration
+        if self.interpenetration:
+            from sdf import SDF
+            self.sdf = SDF()
+            # self.search_tree = search_tree
+            # self.tri_filtering_module = tri_filtering_module
+            # self.pen_distance = pen_distance
+
+        self.use_hands = use_hands
+        if self.use_hands:
+            self.left_hand_prior = left_hand_prior
+            self.right_hand_prior = right_hand_prior
+
+        self.use_face = use_face
+        if self.use_face:
+            self.expr_prior = expr_prior
+            self.jaw_prior = jaw_prior
+
+        self.register_buffer('data_weight',
+                             torch.tensor(data_weight, dtype=dtype))
+        self.register_buffer('body_pose_weight',
+                             torch.tensor(body_pose_weight, dtype=dtype))
+        self.register_buffer('shape_weight',
+                             torch.tensor(shape_weight, dtype=dtype))
+        self.register_buffer('bending_prior_weight',
+                             torch.tensor(bending_prior_weight, dtype=dtype))
+
+        if self.use_hands:
+            self.register_buffer('hand_prior_weight',
+                                 torch.tensor(hand_prior_weight, dtype=dtype))
+        if self.use_face:
+            self.register_buffer('expr_prior_weight',
+                                 torch.tensor(expr_prior_weight, dtype=dtype))
+            self.register_buffer('jaw_prior_weight',
+                                 torch.tensor(jaw_prior_weight, dtype=dtype))
+
+        if self.interpenetration:
+            self.register_buffer('coll_loss_weight',
+                                 torch.tensor(coll_loss_weight, dtype=dtype))
+
+    def reset_loss_weights(self, loss_weight_dict):
+        for key in loss_weight_dict:
+            if hasattr(self, key):
+                weight_tensor = getattr(self, key)
+                if 'torch.Tensor' in str(type(loss_weight_dict[key])):
+                    weight_tensor = loss_weight_dict[key].clone().detach()
+                else:
+                    weight_tensor = torch.tensor(loss_weight_dict[key],
+                                                 dtype=weight_tensor.dtype,
+                                                 device=weight_tensor.device)
+                setattr(self, key, weight_tensor)
+
+    def get_bounding_boxes(self, vertices):
+        num_people = vertices.shape[0]
+        boxes = torch.zeros(num_people, 2, 3, device=vertices.device)
+        for i in range(num_people):
+            boxes[i, 0, :] = vertices[i].min(dim=0)[0]
+            boxes[i, 1, :] = vertices[i].max(dim=0)[0]
+        return boxes
+
+    def forward(self, body_model_output, camera, gt_joints, joints_conf,
+                body_model_faces, joint_weights,
+                use_vposer=False, pose_embedding=None,
+                gt_joints3d=None, joints3d_conf=None,
+                **kwargs):
+        # project model to each view
+        projected_joints = []
+        for cam in camera:
+            projected_joints_ = cam(body_model_output.joints)
+            projected_joints.append(projected_joints_)
+        
+        weights = []
+        for conf in joints_conf:
+            # Calculate the weights for each joints
+            weights_ = (joint_weights * conf
+                    if self.use_joints_conf else
+                    joint_weights).unsqueeze(dim=-1)
+            weights.append(weights_)
+
+        # Calculate the distance of the projected joints from
+        # the ground truth 2D detections
+        joint_loss = 0.
+        for i in range(len(gt_joints)):
+            joint_diff = self.robustifier(gt_joints[i] - projected_joints[i])
+            joint_loss_ = (torch.sum(weights[i] ** 2 * joint_diff) *
+                        self.data_weight ** 2)
+            joint_loss += joint_loss_
+
+        # 3d loss
+        joints3d_loss = 0.
+        if self.use_3d:
+            joints3d_conf = joints3d_conf.unsqueeze(dim=-1)
+            diff3d = self.robustifier(gt_joints3d - body_model_output.joints)
+            joints3d_loss = (torch.sum(joints3d_conf ** 2 * diff3d) *
+                        self.data_weight ** 2)
+
+        # Calculate the loss from the Pose prior
+        if use_vposer:
+            pprior_loss = (pose_embedding.pow(2).sum() *
+                           self.body_pose_weight ** 2)
+        else:
+            pprior_loss = torch.sum(self.body_pose_prior(
+                body_model_output.body_pose,
+                body_model_output.betas)) * self.body_pose_weight ** 2
+            if float(pprior_loss) > 5e4:
+                pprior_loss = 0.
+            pprior_loss += body_model_output.body_pose.pow(2).sum() * (self.body_pose_weight * 4) ** 2
+
+        shape_loss = 0.
+        if not self.fix_shape:
+            shape_loss = torch.sum(self.shape_prior(
+                body_model_output.betas)) * self.shape_weight ** 2
+        # Calculate the prior over the joint rotations. This a heuristic used
+        # to prevent extreme rotation of the elbows and knees
+        body_pose = body_model_output.full_pose[:, 3:66]
+
+        angle_prior_loss = torch.sum(
+            self.angle_prior(body_pose)) * self.bending_prior_weight
+        if float(angle_prior_loss) > 1e4 and not use_vposer:
+            angle_prior_loss = 0.
+
+        left_hand_prior_loss, right_hand_prior_loss = 0.0, 0.0
+        if self.use_hands and self.left_hand_prior is not None:
+            left_hand_prior_loss = torch.sum(
+                self.left_hand_prior(
+                    body_model_output.left_hand_pose)) * \
+                self.hand_prior_weight ** 2
+
+        if self.use_hands and self.right_hand_prior is not None:
+            right_hand_prior_loss = torch.sum(
+                self.right_hand_prior(
+                    body_model_output.right_hand_pose)) * \
+                self.hand_prior_weight ** 2
+
+        expression_loss = 0.0
+        jaw_prior_loss = 0.0
+        if self.use_face:
+            expression_loss = torch.sum(self.expr_prior(
+                body_model_output.expression)) * \
+                self.expr_prior_weight ** 2
+
+            if hasattr(self, 'jaw_prior'):
+                jaw_prior_loss = torch.sum(
+                    self.jaw_prior(
+                        body_model_output.jaw_pose.mul(
+                            self.jaw_prior_weight)))
+
+
+        pen_loss = 0.0
+        # Calculate the loss due to interpenetration
+        if (self.interpenetration and self.coll_loss_weight.item() > 0):
+            vertices = body_model_output.vertices
+            boxes = self.get_bounding_boxes(vertices)
+            boxes_center = boxes.mean(dim=1).unsqueeze(dim=1)
+            boxes_scale = (1+0.2) * 0.5*(boxes[:,1] - boxes[:,0]).max(dim=-1)[0][:,None,None]
+
+            with torch.no_grad():
+                vertices_centered = vertices - boxes_center
+                vertices_centered_scaled = vertices_centered / boxes_scale
+                assert(vertices_centered_scaled.min() >= -1)
+                assert(vertices_centered_scaled.max() <= 1)
+                assert(vertices.shape[0] == 1)
+                phi = self.sdf(body_model_faces.reshape(1, -1, 3).to(torch.int32), vertices_centered_scaled, grid_size=128)
+                assert(phi.min() >= 0)
+
+            valid_people = vertices.shape[0]
+            # Convert vertices to the format expected by grid_sample
+            for i in range(valid_people):
+                weights = torch.ones(valid_people, 1, device=vertices.device)
+                # weights[i,0] = 0.
+                # Change coordinate system to local coordinate system of each person
+                vertices_local = (vertices - boxes_center[i].unsqueeze(dim=0)) / boxes_scale[i].unsqueeze(dim=0)
+                vertices_grid = vertices_local.view(1,-1,1,1,3)
+                # Sample from the phi grid
+                phi_val = nn.functional.grid_sample(phi[i][None, None], vertices_grid).view(valid_people, -1)
+                # ignore the phi values for the i-th shape
+                cur_loss = weights * phi_val
+                # if self.debugging:
+                #     import ipdb;ipdb.set_trace()
+                # # robustifier
+                # if self.robustifier:
+                #     frac = (cur_loss / self.robustifier) ** 2
+                #     cur_loss = frac / (frac + 1)
+
+                pen_loss += (self.coll_loss_weight * cur_loss.sum() / valid_people) ** 2
+                # print(pen_loss)
+        # if (self.interpenetration and self.coll_loss_weight.item() > 0):
+        #     batch_size = projected_joints.shape[0]
+        #     triangles = torch.index_select(
+        #         body_model_output.vertices, 1,
+        #         body_model_faces).view(batch_size, -1, 3, 3)
+
+        #     with torch.no_grad():
+        #         collision_idxs = self.search_tree(triangles)
+
+        #     # Remove unwanted collisions
+        #     if self.tri_filtering_module is not None:
+        #         collision_idxs = self.tri_filtering_module(collision_idxs)
+
+        #     if collision_idxs.ge(0).sum().item() > 0:
+        #         pen_loss = torch.sum(
+        #             self.coll_loss_weight *
+        #             self.pen_distance(triangles, collision_idxs))
+
+        total_loss = (joint_loss + joints3d_loss + pprior_loss + shape_loss +
+                      angle_prior_loss + pen_loss + 
+                      jaw_prior_loss + expression_loss + left_hand_prior_loss + right_hand_prior_loss)
+        return total_loss
+
+'''
 class SMPLifyLoss(nn.Module):
 
     def __init__(self, search_tree=None,
@@ -407,7 +659,7 @@ class SMPLifyLoss(nn.Module):
         total_loss = (joint_loss + joints3d_loss + pprior_loss + shape_loss +
                       angle_prior_loss + pen_loss)
         return total_loss
-
+'''
 
 class SMPLifyCameraInitLoss(nn.Module):
 

@@ -177,7 +177,7 @@ def parse_config(argv=None):
     #                     ' result')
 
 
-    parser.add_argument('--joints_to_ign', default=-1, type=int,
+    parser.add_argument('--joints_to_ign', default=[-1], type=int,
                         nargs='*',
                         help='Indices of joints to be ignored')
 
@@ -220,29 +220,29 @@ def parse_config(argv=None):
     # parser.add_argument('--use_pca', default=True,
     #                     type=lambda x: x.lower() in ['true', '1'],
     #                     help='Use the low dimensional PCA space for the hands')
-    # parser.add_argument('--num_pca_comps', default=6, type=int,
-    #                     help='The number of PCA components for the hand.')
+    parser.add_argument('--num_pca_comps', default=6, type=int,
+                        help='The number of PCA components for the hand.')
     # parser.add_argument('--flat_hand_mean', default=False,
     #                     type=lambda arg: arg.lower() in ['true', '1'],
     #                     help='Use the flat hand as the mean pose')
 
-    # parser.add_argument('--left_hand_prior_type', default='mog', type=str,
-    #                     choices=['mog', 'l2', 'None'],
-    #                     help='The type of prior that will be used to' +
-    #                     ' regularize the optimization of the pose of the' +
-    #                     ' left hand. Can be a Mixture of' +
-    #                     ' Gaussians (mog)')
-    # parser.add_argument('--right_hand_prior_type', default='mog', type=str,
-    #                     choices=['mog', 'l2', 'None'],
-    #                     help='The type of prior that will be used to' +
-    #                     ' regularize the optimization of the pose of the' +
-    #                     ' right hand. Can be a Mixture of' +
-    #                     ' Gaussians (mog)')
-    # parser.add_argument('--jaw_prior_type', default='l2', type=str,
-    #                     choices=['l2', 'None'],
-    #                     help='The type of prior that will be used to' +
-    #                     ' regularize the optimization of the pose of the' +
-    #                     ' jaw.')
+    parser.add_argument('--left_hand_prior_type', default='mog', type=str,
+                        choices=['mog', 'l2', 'None'],
+                        help='The type of prior that will be used to' +
+                        ' regularize the optimization of the pose of the' +
+                        ' left hand. Can be a Mixture of' +
+                        ' Gaussians (mog)')
+    parser.add_argument('--right_hand_prior_type', default='mog', type=str,
+                        choices=['mog', 'l2', 'None'],
+                        help='The type of prior that will be used to' +
+                        ' regularize the optimization of the pose of the' +
+                        ' right hand. Can be a Mixture of' +
+                        ' Gaussians (mog)')
+    parser.add_argument('--jaw_prior_type', default='l2', type=str,
+                        choices=['l2', 'None'],
+                        help='The type of prior that will be used to' +
+                        ' regularize the optimization of the pose of the' +
+                        ' jaw.')
 
 
     # # Left/Right shoulder and hips
@@ -271,28 +271,28 @@ def parse_config(argv=None):
     #                     type=lambda x: x.lower() in ['true', '1'],
     #                     help='Penalize outside')
 
-    # parser.add_argument('--expr_weights',
-    #                     default=[1e2, 5 * 1e1, 1e1, .5 * 1e1],
-    #                     type=float, nargs='*',
-    #                     help='The weights of the Expressions regularizer')
-    # parser.add_argument('--face_joints_weights',
-    #                     default=[0.0, 0.0, 0.0, 2.0], type=float,
-    #                     nargs='*',
-    #                     help='The weights for the facial keypoints' +
-    #                     ' for each stage of the optimization')
-    # parser.add_argument('--hand_joints_weights',
-    #                     default=[0.0, 0.0, 0.0, 2.0],
-    #                     type=float, nargs='*',
-    #                     help='The weights for the 2D joint error of the hands')
-    # parser.add_argument('--jaw_pose_prior_weights',
-    #                     nargs='*',
-    #                     help='The weights of the pose regularizer of the' +
-    #                     ' hands')
-    # parser.add_argument('--hand_pose_prior_weights',
-    #                     default=[1e2, 5 * 1e1, 1e1, .5 * 1e1],
-    #                     type=float, nargs='*',
-    #                     help='The weights of the pose regularizer of the' +
-    #                     ' hands')
+    parser.add_argument('--expr_weights',
+                        default=[1e2, 5 * 1e1, 1e1, .5 * 1e1],
+                        type=float, nargs='*',
+                        help='The weights of the Expressions regularizer')
+    parser.add_argument('--face_joints_weights',
+                        default=[0.0, 0.0, 0.0, 2.0], type=float,
+                        nargs='*',
+                        help='The weights for the facial keypoints' +
+                        ' for each stage of the optimization')
+    parser.add_argument('--hand_joints_weights',
+                        default=[0.0, 0.0, 0.0, 2.0],
+                        type=float, nargs='*',
+                        help='The weights for the 2D joint error of the hands')
+    parser.add_argument('--jaw_pose_prior_weights',
+                        nargs='*',
+                        help='The weights of the pose regularizer of the' +
+                        ' hands')
+    parser.add_argument('--hand_pose_prior_weights',
+                        default=[1e2, 5 * 1e1, 1e1, .5 * 1e1],
+                        type=float, nargs='*',
+                        help='The weights of the pose regularizer of the' +
+                        ' hands')
 
 
     # parser.add_argument('--depth_loss_weight', default=1e2, type=float,
@@ -313,17 +313,17 @@ def parse_config(argv=None):
     # parser.add_argument('--ign_part_pairs', default=None,
     #                     nargs='*', type=str,
     #                     help='Pairs of parts whose collisions will be ignored')
-    # parser.add_argument('--use_hands', default=False,
-    #                     type=lambda x: x.lower() in ['true', '1'],
-    #                     help='Use the hand keypoints in the SMPL' +
-    #                     'optimization process')
-    # parser.add_argument('--use_face', default=False,
-    #                     type=lambda x: x.lower() in ['true', '1'],
-    #                     help='Use the facial keypoints in the optimization' +
-    #                     ' process')
-    # parser.add_argument('--use_face_contour', default=False,
-    #                     type=lambda x: x.lower() in ['true', '1'],
-    #                     help='Use the dynamic contours of the face')
+    parser.add_argument('--use_hands', default=False,
+                        type=lambda x: x.lower() in ['true', '1'],
+                        help='Use the hand keypoints in the SMPL' +
+                        'optimization process')
+    parser.add_argument('--use_face', default=False,
+                        type=lambda x: x.lower() in ['true', '1'],
+                        help='Use the facial keypoints in the optimization' +
+                        ' process')
+    parser.add_argument('--use_face_contour', default=False,
+                        type=lambda x: x.lower() in ['true', '1'],
+                        help='Use the dynamic contours of the face')
     # parser.add_argument('--side_view_thsh',
     #                     default=25,
     #                     type=float,
