@@ -381,6 +381,84 @@ def vis_img(name, im):
     cv2.imshow(name,im)
     # cv2.waitKey()
 
+'''
+def save_results(setting, data, result, 
+                use_vposer=True, 
+                save_meshes=False, save_images=False, 
+                **kwargs):
+    model_type=kwargs.get('model_type', 'smpl')
+    vposer = setting['vposer']
+    model = setting['model']
+    camera = setting['camera']
+    serial = data['serial']
+    fn = data['fn']
+    img_path = data['img_path']
+    keypoints = data['keypoints']
+    person_id = 0
+
+    if use_vposer:
+        pose_embedding = result['pose_embedding']
+        # body_pose = vposer.decode(
+        #         pose_embedding, output_type='aa').view(1, -1) if use_vposer else None
+        body_pose = vposer.forward(
+                pose_embedding).view(1,-1) if use_vposer else None
+        # the parameters of foot and hand are from vposer
+        # we do not use this inaccurate results
+        if False:
+            body_pose[:,18:24] = 0.
+            body_pose[:,27:33] = 0.
+            body_pose[:,57:] = 0.
+        result['body_pose'] = body_pose.detach().cpu().numpy()
+        orient = np.array(model.global_orient.detach().cpu().numpy())
+        temp_pose = body_pose.detach().cpu().numpy()
+        pose = np.hstack((orient,temp_pose))
+        result['pose'] = pose
+        result['pose_embedding'] = pose_embedding.detach().cpu().numpy()
+    else:
+        if False:
+            result['body_pose'][:,18:24] = 0.
+            result['body_pose'][:,27:33] = 0.
+            result['body_pose'][:,57:] = 0.
+        pose = np.hstack((result['global_orient'],result['body_pose']))
+        result['pose'] = pose
+
+    # save results
+    curr_result_fn = osp.join(setting['result_folder'], serial, fn)
+    if not osp.exists(curr_result_fn):
+        os.makedirs(curr_result_fn)
+    result_fn = osp.join(curr_result_fn, '{:03d}.pkl'.format(person_id))
+    with open(result_fn, 'wb') as result_file:
+        pickle.dump(result, result_file, protocol=2)
+
+    if save_meshes or save_images:
+        if False:
+            body_pose = model.body_pose.detach()
+            body_pose[:,18:24] = 0.
+            body_pose[:,27:33] = 0.
+            body_pose[:,57:] = 0.
+
+        model_output = model(return_verts=True, body_pose=body_pose)
+        vertices = model_output.vertices.detach().cpu().numpy().squeeze()
+
+        # save image
+        if save_images:
+            curr_image_fn = osp.join(setting['img_folder'], serial, fn)
+            if not osp.exists(curr_image_fn):
+                os.makedirs(curr_image_fn)
+            body_joints = model_output.joints
+            verts = model_output.vertices
+            project_to_img(body_joints, verts, model.faces, keypoints, camera, img_path, viz=True, path=curr_image_fn)
+
+        if save_meshes:
+            import trimesh
+            curr_mesh_fn = osp.join(setting['mesh_folder'], serial, fn)
+            if not osp.exists(curr_mesh_fn):
+                os.makedirs(curr_mesh_fn)
+            mesh_fn = osp.join(curr_mesh_fn, '{:03d}.obj'.format(person_id))
+            out_mesh = trimesh.Trimesh(vertices, model.faces, process=False)
+            out_mesh.export(mesh_fn)
+'''
+
 def save_results(setting, data, result, 
                 use_vposer=True, 
                 save_meshes=False, save_images=False, 
