@@ -295,7 +295,7 @@ class FittingData(Dataset):
         self.dtype = dtype
         self.use_3d = use_3d
         self.use_hip = use_hip
-        self.joints_to_ign = joints_to_ign ## 需要更改
+        self.joints_to_ign = joints_to_ign
         self.use_face_contour = use_face_contour
 
         self.pose_format = pose_format

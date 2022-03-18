@@ -25,6 +25,7 @@ import os
 import time
 
 import numpy as np
+from pyrender import Scene
 
 import torch
 import torch.nn as nn
@@ -69,7 +70,7 @@ class FittingMonitor():
             [batch_size, 1])
 
     def run_fitting(self, optimizer, closure, params, body_model,
-                    use_vposer=True, pose_embedding=None, vposer=None, camera=None, img_path=None,
+                    use_vposer=True, pose_embedding=None, vposer=None, camera=None, img_path=None, visflag=False, scene=None, viser=None,
                     **kwargs):
         ''' Helper function for running an optimization process
             Parameters
@@ -97,6 +98,42 @@ class FittingMonitor():
         prev_loss = None
         print('\n')
         for n in range(self.maxiters):
+            if visflag:
+                import open3d as o3d
+                # body_pose = vposer.forward(
+                #     pose_embedding, output_type='aa').view(
+                #         1, -1) if use_vposer else None
+                viser.clear_geometries()
+                body_pose = vposer.forward(
+                    pose_embedding).view(1,-1) if use_vposer else None
+                model_output = body_model(
+                    return_verts=True, body_pose=body_pose)
+                # vertices = model_output.vertices.detach()
+                mesh = o3d.geometry.TriangleMesh()
+                mesh.vertices = o3d.utility.Vector3dVector(
+                    model_output.vertices.detach().cpu().numpy()[0]
+                )
+                mesh.triangles = o3d.utility.Vector3iVector(
+                    body_model.faces
+                )
+                sceneVis = o3d.io.read_triangle_mesh(scene)
+                mesh.compute_vertex_normals()
+                sceneVis.compute_vertex_normals()
+                viser.add_geometry(mesh)
+                viser.add_geometry(sceneVis)
+                viser.update_geometry(mesh)
+                viser.update_geometry(sceneVis)
+                viser.poll_events()
+                viser.update_renderer()
+                # import time
+                # time.sleep(1)
+                # viser.update_geometry(mesh)
+                # viser.poll_events()
+                # viser.update_renderer()
+                # import time
+                # time.sleep(1)
+                # o3d.visualization.draw_geometries([mesh,sceneVis])
+
             loss = optimizer.step(closure)
             if torch.isnan(loss).sum() > 0:
                 print('NaN loss value, stopping!')
@@ -225,7 +262,9 @@ class SMPLifyLoss(nn.Module):
                  left_hand_prior=None, right_hand_prior=None,
                  hand_prior_weight=0.0,
                  expr_prior_weight=0.0, jaw_prior_weight=0.0,
+                 contact_loss_weight=0.0,
                  use_face=True, use_hands=True,
+                 use_contact=True,
 
                  use_joints_conf=True,
                  interpenetration=True, dtype=torch.float32,
@@ -236,6 +275,8 @@ class SMPLifyLoss(nn.Module):
                  coll_loss_weight=0.0,
                  reduction='sum',
                  use_3d=False,
+                 body_model=None,
+                 use_cuda=True,
                  **kwargs):
 
         super(SMPLifyLoss, self).__init__()
@@ -272,6 +313,16 @@ class SMPLifyLoss(nn.Module):
             self.expr_prior = expr_prior
             self.jaw_prior = jaw_prior
 
+        self.use_contact = use_contact
+        if self.use_contact:
+            from utils.contact_loss import ContactLoss
+            self.contact_loss = ContactLoss(
+                body_model,kwargs.get('scene'),
+                kwargs.get('rho_contact'),kwargs.get('contact_angle'),
+                body_segments_dir=kwargs.get('body_segments_dir'),
+                use_cuda=use_cuda
+            )
+
         self.register_buffer('data_weight',
                              torch.tensor(data_weight, dtype=dtype))
         self.register_buffer('body_pose_weight',
@@ -289,7 +340,9 @@ class SMPLifyLoss(nn.Module):
                                  torch.tensor(expr_prior_weight, dtype=dtype))
             self.register_buffer('jaw_prior_weight',
                                  torch.tensor(jaw_prior_weight, dtype=dtype))
-
+        if self.use_contact:
+            self.register_buffer('contact_loss_weight',
+                                 torch.tensor(contact_loss_weight, dtype=dtype))
         if self.interpenetration:
             self.register_buffer('coll_loss_weight',
                                  torch.tensor(coll_loss_weight, dtype=dtype))
@@ -401,6 +454,10 @@ class SMPLifyLoss(nn.Module):
                         body_model_output.jaw_pose.mul(
                             self.jaw_prior_weight)))
 
+        contact_loss = 0.0
+        if (self.use_contact and self.contact_loss_weight.item() > 0):
+            contact_dist = self.contact_loss(body_model_output,body_model_faces)
+            contact_loss = self.contact_loss_weight * contact_dist.mean()
 
         pen_loss = 0.0
         # Calculate the loss due to interpenetration
@@ -440,27 +497,11 @@ class SMPLifyLoss(nn.Module):
 
                 pen_loss += (self.coll_loss_weight * cur_loss.sum() / valid_people) ** 2
                 # print(pen_loss)
-        # if (self.interpenetration and self.coll_loss_weight.item() > 0):
-        #     batch_size = projected_joints.shape[0]
-        #     triangles = torch.index_select(
-        #         body_model_output.vertices, 1,
-        #         body_model_faces).view(batch_size, -1, 3, 3)
-
-        #     with torch.no_grad():
-        #         collision_idxs = self.search_tree(triangles)
-
-        #     # Remove unwanted collisions
-        #     if self.tri_filtering_module is not None:
-        #         collision_idxs = self.tri_filtering_module(collision_idxs)
-
-        #     if collision_idxs.ge(0).sum().item() > 0:
-        #         pen_loss = torch.sum(
-        #             self.coll_loss_weight *
-        #             self.pen_distance(triangles, collision_idxs))
 
         total_loss = (joint_loss + joints3d_loss + pprior_loss + shape_loss +
                       angle_prior_loss + pen_loss + 
-                      jaw_prior_loss + expression_loss + left_hand_prior_loss + right_hand_prior_loss)
+                      jaw_prior_loss + expression_loss + left_hand_prior_loss + right_hand_prior_loss + 
+                      contact_loss)
         return total_loss
 
 '''

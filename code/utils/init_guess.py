@@ -112,22 +112,15 @@ def init_guess(setting, data, use_torso=False, **kwargs):
     model_output = model(return_verts=True, return_full_pose=True, body_pose=init_pose) ## joints有lsp+face组成
     verts = model_output.vertices[0]
     joints = model_output.joints[0].detach().cpu().numpy()
-    # if kwargs.get('model_type') == 'smpllsp':
-    #     J = torch.matmul(model.joint_regressor, verts)
-    # else:
-    #     J = torch.matmul(model.J_regressor, verts)
-
-    # verts = verts.unsqueeze(0)
-    # J = J.unsqueeze(0)
-    # joints = model.vertex_joint_selector(verts, J)
-    # # Map the joints to the current dataset
-    # if model.joint_mapper is not None:
-    #     joints = model.joint_mapper(joints).detach().cpu().numpy()[0]
 
     if len(keypoints) == 1:
         # guess depth for single-view input
+        ## 序号是lsp那里对应的
         # 5 is L shoulder, 11 is L hip
         # 6 is R shoulder, 12 is R hip
+        ## 此处序号是openpose25对应的
+        # 5 is L shoulder, 12 is L hip
+        # 2 is R shoulder, 9 is R hip
         torso3d = joints[[5,2,12,9]]
         torso2d = keypoints[0][0][[5,2,12,9]]
         torso3d = np.insert(torso3d, 3, 1, axis=1).T
@@ -197,6 +190,59 @@ def init_guess(setting, data, use_torso=False, **kwargs):
             joint_projection(joints3d, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], True)
             surface_projection(verts, model.faces, joints, setting['extris'][i], setting['intris'][i], data['img'][i][:,:,::-1], 5)
 
+def init_guess_nonlinear(setting, data, use_torso=False, **kwargs):
+    gt_joints = torch.tensor(data['keypoints'][0][:,:,:2]).to(device=setting['device'],dtype=setting['dtype'])
+    body_model = setting['model']
+    init_t = guess_init(
+        body_model,gt_joints,[[5,12],[2,9]],
+        use_vposer=kwargs['use_vposer'], vposer=setting['vposer'],
+        pose_embedding=setting['pose_embedding'],
+        model_type=kwargs['model_type'],
+        focal_length=setting['camera'][0].focal_length_x, dtype=setting['dtype'])
+    from utils import fitting
+    ## 补充非线性 全局变换优化
+    camera_loss = fitting.create_loss(
+        'camera_init',
+        trans_estimation=init_t,
+        init_joints_idxs=torch.tensor([9,12,2,5]).to(device=setting['device']),
+        depth_loss_weight=0.0,
+        camera_mode='fixed',
+        dtype=setting['dtype']).to(device=setting['device'])
+    camera_loss.trans_estimation[:] = init_t
+    monitor = fitting.FittingMonitor(batch_size=1, **kwargs)
+    body_mean_pose = torch.zeros([1, 32],
+    dtype=setting['dtype'])
+    body_model.reset_params(body_pose=body_mean_pose, transl=init_t)
+    camera_opt_params = [body_model.transl, body_model.global_orient]
+    from optimizers import optim_factory
+    camera_optimizer, camera_create_graph = optim_factory.create_optimizer(
+        camera_opt_params,
+        **kwargs)
+    fit_camera = monitor.create_fitting_closure(
+        camera_optimizer, body_model, setting['camera'][0], gt_joints,
+        camera_loss, create_graph=camera_create_graph,
+        use_vposer=kwargs['use_vposer'], vposer=setting['vposer'],
+        pose_embedding=setting['pose_embedding'],
+        scan_tensor=None,
+        return_full_pose=False, return_verts=False)
+    cam_init_loss_val = monitor.run_fitting(
+        camera_optimizer,
+        fit_camera,
+        camera_opt_params, body_model,
+        use_vposer=kwargs['use_vposer'],
+        pose_embedding=setting['pose_embedding'],
+        vposer=setting['vposer'])
+    orient = body_model.global_orient.detach().cpu().numpy()
+    body_transl = body_model.transl.clone().detach()
+    from collections import defaultdict
+    new_params = defaultdict(
+        transl=body_transl,
+        global_orient=orient,
+        body_pose=body_mean_pose)
+    body_model.reset_params(**new_params)
+    if kwargs.get('use_vposer'):
+        with torch.no_grad():   
+            setting['pose_embedding'].fill_(0)
 
 def load_init(setting, data, results, use_torso=False, **kwargs):
     model = setting['model']

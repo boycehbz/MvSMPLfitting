@@ -61,13 +61,15 @@ def init(**kwarg):
         assert(input_gender=='neutral'), 'smpl-lsp model support neutral only'
     gender_lbl_type = kwarg.pop('gender_lbl_type', 'none')
 
-    if model_type == 'smpllsp':
-        # the hip joint of smpl is different with 2D annotation predicted by openpose/alphapose, so we use smpl-lsp model to replace
-        pose_format = 'lsp14' 
-    elif model_type == 'smpl':
-        pose_format = 'coco17'
-    elif model_type == 'smplx':
-        pose_format = 'coco25'
+    # if model_type == 'smpllsp':
+    #     # the hip joint of smpl is different with 2D annotation predicted by openpose/alphapose, so we use smpl-lsp model to replace
+    #     pose_format = 'lsp14' 
+    # elif model_type == 'smpl':
+    #     pose_format = 'coco17'
+    # elif model_type == 'smplx':
+    #     pose_format = 'coco25'
+    ## 新增
+    pose_format = kwarg.pop('pose_format', 'coco25')
 
     dataset_obj = create_dataset(pose_format=pose_format, **kwarg)
 
@@ -99,13 +101,11 @@ def init(**kwarg):
                         **kwarg)
 
     model = smplx.create(gender=input_gender,**model_params) ## JointMapper 由 smpl 类自行映射
-    # model = smplx.create_scale(gender=input_gender, **model_params) ## 多了 lsp 以及 scale 参数
 
     # load camera parameters
     cam_params = kwarg.pop('cam_param')
     extris, intris = load_camera_para(cam_params)
     trans, rot = get_rot_trans(extris, photoscan=False)
-
 
     # Create the camera object
     # create camera
@@ -172,7 +172,6 @@ def init(**kwarg):
             use_right_hand=True,
             **rhand_args)
 
-
     if use_cuda and torch.cuda.is_available():
         device = torch.device('cuda')
 
@@ -201,14 +200,6 @@ def init(**kwarg):
     vposer = None
     pose_embedding = None
     batch_size = 1
-    # if kwarg.get('use_vposer'):
-    #     vposer_ckpt = osp.expandvars(kwarg.get('prior_folder'))
-    #     vposer = load_vposer(vposer_ckpt, vp_model='snapshot')
-    #     vposer = vposer.to(device=device)
-    #     vposer.eval()
-    #     pose_embedding = torch.zeros([batch_size, 32],
-    #                                  dtype=dtype, device=device,
-    #                                  requires_grad=True)
     if kwarg.get('use_vposer'):
         vposer_ckpt = osp.expandvars(kwarg.get('prior_folder'))
         vposer = VPoserDecoder(vposer_ckpt=vposer_ckpt,latent_dim=32,dtype=dtype,**kwarg)
@@ -229,7 +220,7 @@ def init(**kwarg):
     else:
         setting['fixed_shape'] = None
 
-    model.reset_params()
+    model.reset_params() ## 初始化参数置0
     # return setting
     setting['use_3d'] = kwarg.pop("use_3d")
     setting['extrinsics'] = extris
@@ -254,5 +245,7 @@ def init(**kwarg):
     setting['mesh_folder'] = mesh_folder
     setting['pose_embedding'] = pose_embedding
     setting['batch_size'] = batch_size
+    setting['global_init_type'] = kwarg.get('global_init_type','linear')
+    setting['scene'] = kwarg.get('scene')
+    setting['body_segments_dir'] = kwarg.get('body_segments_dir')
     return dataset_obj, setting
-

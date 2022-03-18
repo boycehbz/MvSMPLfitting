@@ -47,7 +47,9 @@ def non_linear_solver(
                     expr_weights=None,
                     use_face=True,
                     use_hands=True,
+                    use_contact=True,
                     shape_weights=None,
+                    contact_loss_weights=None,
                     coll_loss_weights=None,
                     use_joints_conf=False,
                     use_3d=False,
@@ -67,7 +69,7 @@ def non_linear_solver(
     dtype = setting['dtype']
     vposer = setting['vposer']
     keypoints = data['keypoints']
-    joint_weights = setting['joints_weight'] # 17
+    joint_weights = setting['joints_weight']
     model = setting['model']
     camera = setting['camera']
     pose_embedding = setting['pose_embedding']
@@ -125,7 +127,8 @@ def non_linear_solver(
     if use_hands:
         opt_weights_dict['hand_weight'] = hand_joints_weights
         opt_weights_dict['hand_prior_weight'] = hand_pose_prior_weights
-
+    if use_contact:
+        opt_weights_dict['contact_loss_weight'] = contact_loss_weights   
     if interpenetration:
         opt_weights_dict['coll_loss_weight'] = coll_loss_weights
 
@@ -160,6 +163,9 @@ def non_linear_solver(
                                tri_filtering_module=filter_faces,
                                dtype=dtype,
                                use_3d=use_3d,
+                               body_model=model,
+                               use_cuda=use_cuda,
+                               use_contact=use_contact,
                                **kwargs)
     loss = loss.to(device=device)
 
@@ -198,6 +204,29 @@ def non_linear_solver(
     #     with torch.no_grad():
     #         pose_embedding.fill_(0)
     # model.reset_params(**new_params)
+    vis=None
+    visFlag=True
+    if visFlag:
+        import open3d as o3d
+        vis = o3d.visualization.Visualizer()
+        vis.create_window()
+        body_pose = vposer.forward(
+                    pose_embedding).view(1,-1) if use_vposer else None
+        model_output = model(
+                    return_verts=True, body_pose=body_pose)
+                # vertices = model_output.vertices.detach()
+        mesh = o3d.geometry.TriangleMesh()
+        mesh.vertices = o3d.utility.Vector3dVector(
+                    model_output.vertices.detach().cpu().numpy()[0]
+                )
+        mesh.triangles = o3d.utility.Vector3iVector(
+                    model.faces
+                )
+        mesh.compute_vertex_normals()
+        sceneVis = o3d.io.read_triangle_mesh(kwargs.get('scene'))
+        sceneVis.compute_vertex_normals()
+        vis.add_geometry(mesh)
+        vis.add_geometry(sceneVis)
 
     for opt_idx, curr_weights in enumerate(tqdm(opt_weights, desc='Stage')):
         # pass stage1 and stage2 if it is a sequence
@@ -209,12 +238,12 @@ def non_linear_solver(
 
         body_params = list(model.parameters()) # shape + t + r + s
 
-        print("--------------------------------")
-        for name,param in model.named_parameters():
-            print(name)
-            print(param.shape)
-            print(param.requires_grad)
-            print("---------------------------------")
+        # print("--------------------------------")
+        # for name,param in model.named_parameters():
+        #     print(name)
+        #     print(param.shape)
+        #     print(param.requires_grad)
+        #     print("---------------------------------")
 
         final_params = list(
             filter(lambda x: x.requires_grad, body_params))
@@ -254,12 +283,23 @@ def non_linear_solver(
             if use_cuda and torch.cuda.is_available():
                 torch.cuda.synchronize()
             stage_start = time.time()
-        final_loss_val = monitor.run_fitting(
-            body_optimizer,
-            closure, final_params,
-            model,
-            pose_embedding=pose_embedding, vposer=vposer, camera=camera, img_path=data['img_path'],
-            use_vposer=use_vposer)
+        # if curr_weights['contact_loss_weight'] < 1.0:
+        if opt_idx < 4:
+            final_loss_val = monitor.run_fitting(
+                body_optimizer,
+                closure, final_params,
+                model,
+                pose_embedding=pose_embedding, vposer=vposer, camera=camera, img_path=data['img_path'],
+                use_vposer=use_vposer,
+                visflag=False,scene=kwargs.get('scene'),viser=vis)
+        else:
+            final_loss_val = monitor.run_fitting(
+                body_optimizer,
+                closure, final_params,
+                model,
+                pose_embedding=pose_embedding, vposer=vposer, camera=camera, img_path=data['img_path'],
+                use_vposer=use_vposer,
+                visflag=visFlag,scene=kwargs.get('scene'),viser=vis)
 
         if interactive:
             if use_cuda and torch.cuda.is_available():
