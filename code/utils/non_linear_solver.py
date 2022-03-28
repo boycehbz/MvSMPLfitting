@@ -48,8 +48,10 @@ def non_linear_solver(
                     use_face=True,
                     use_hands=True,
                     use_contact=True,
+                    use_foot_contact=True,
                     shape_weights=None,
                     contact_loss_weights=None,
+                    foot_contact_loss_weights=None,
                     coll_loss_weights=None,
                     use_joints_conf=False,
                     use_3d=False,
@@ -129,6 +131,8 @@ def non_linear_solver(
         opt_weights_dict['hand_prior_weight'] = hand_pose_prior_weights
     if use_contact:
         opt_weights_dict['contact_loss_weight'] = contact_loss_weights   
+    if use_foot_contact:
+        opt_weights_dict['foot_contact_loss_weights'] = foot_contact_loss_weights
     if interpenetration:
         opt_weights_dict['coll_loss_weight'] = coll_loss_weights
 
@@ -166,6 +170,7 @@ def non_linear_solver(
                                body_model=model,
                                use_cuda=use_cuda,
                                use_contact=use_contact,
+                               use_foot_contact=use_foot_contact,
                                **kwargs)
     loss = loss.to(device=device)
 
@@ -193,19 +198,8 @@ def non_linear_solver(
     final_loss_val = 0
     opt_start = time.time()
 
-    # # initial value for non-linear solve
-    # new_params = defaultdict(global_orient=model.global_orient,
-    #                             # body_pose=body_mean_pose,
-    #                             transl=model.transl,
-    #                             scale=model.scale,
-    #                             betas=model.betas,
-    #                             )
-    # if vposer is not None:
-    #     with torch.no_grad():
-    #         pose_embedding.fill_(0)
-    # model.reset_params(**new_params)
     vis=None
-    visFlag=True
+    visFlag=False
     if visFlag:
         import open3d as o3d
         vis = o3d.visualization.Visualizer()

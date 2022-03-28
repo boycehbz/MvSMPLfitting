@@ -52,16 +52,6 @@ class FittingMonitor():
         self.body_color = body_color
         self.model_type = model_type
 
-    # def __enter__(self):
-    #     self.steps = 0
-    #     if self.visualize:
-    #         self.mv = MeshViewer(body_color=self.body_color)
-    #     return self
-
-    # def __exit__(self, exception_type, exception_value, traceback):
-    #     if self.visualize:
-    #         self.mv.close_viewer()
-
     def set_colors(self, vertex_color):
         batch_size = self.colors.shape[0]
 
@@ -265,7 +255,7 @@ class SMPLifyLoss(nn.Module):
                  contact_loss_weight=0.0,
                  use_face=True, use_hands=True,
                  use_contact=True,
-
+                 use_foot_contact=True,
                  use_joints_conf=True,
                  interpenetration=True, dtype=torch.float32,
                  data_weight=1.0,
@@ -273,6 +263,7 @@ class SMPLifyLoss(nn.Module):
                  shape_weight=0.0,
                  bending_prior_weight=0.0,
                  coll_loss_weight=0.0,
+                 foot_contact_loss_weights=0.0,
                  reduction='sum',
                  use_3d=False,
                  body_model=None,
@@ -313,6 +304,15 @@ class SMPLifyLoss(nn.Module):
             self.expr_prior = expr_prior
             self.jaw_prior = jaw_prior
 
+        self.use_foot_contact = use_foot_contact
+        if self.use_foot_contact:
+            from utils.contact_loss import FootoContactLoss
+            self.foot_contact_loss = FootoContactLoss(
+                kwargs.get('rho_contact'),
+                body_segments_dir=kwargs.get('body_segments_dir'),
+                use_cuda=use_cuda
+            )
+
         self.use_contact = use_contact
         if self.use_contact:
             from utils.contact_loss import ContactLoss
@@ -340,6 +340,9 @@ class SMPLifyLoss(nn.Module):
                                  torch.tensor(expr_prior_weight, dtype=dtype))
             self.register_buffer('jaw_prior_weight',
                                  torch.tensor(jaw_prior_weight, dtype=dtype))
+        if self.use_foot_contact:
+            self.register_buffer('foot_contact_loss_weights',
+                                 torch.tensor(foot_contact_loss_weights,dtype=dtype))
         if self.use_contact:
             self.register_buffer('contact_loss_weight',
                                  torch.tensor(contact_loss_weight, dtype=dtype))
@@ -454,6 +457,11 @@ class SMPLifyLoss(nn.Module):
                         body_model_output.jaw_pose.mul(
                             self.jaw_prior_weight)))
 
+        foot_contact_loss = 0.0
+        if (self.use_foot_contact and self.foot_contact_loss_weights.item() > 0):
+            foot_contact_dist = self.foot_contact_loss(body_model_output)
+            foot_contact_loss = self.foot_contact_loss_weights * foot_contact_dist.mean()
+
         contact_loss = 0.0
         if (self.use_contact and self.contact_loss_weight.item() > 0):
             contact_dist = self.contact_loss(body_model_output,body_model_faces)
@@ -501,7 +509,7 @@ class SMPLifyLoss(nn.Module):
         total_loss = (joint_loss + joints3d_loss + pprior_loss + shape_loss +
                       angle_prior_loss + pen_loss + 
                       jaw_prior_loss + expression_loss + left_hand_prior_loss + right_hand_prior_loss + 
-                      contact_loss)
+                      contact_loss + foot_contact_loss)
         return total_loss
 
 '''

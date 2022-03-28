@@ -239,6 +239,7 @@ def init(**kwarg):
     setting['right_hand_prior'] = right_hand_prior
     setting['use_hands'] = use_hands
     setting['use_face'] = use_face
+    setting['use_foot_contact'] = kwarg.get('use_foot_contact')
     setting['cameras'] = camera
     setting['img_folder'] = out_img_folder
     setting['result_folder'] = result_folder
