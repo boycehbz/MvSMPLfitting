@@ -1,7 +1,8 @@
 
 # data related
-data_folder: "dataproxCheck"
-cam_param: "dataproxCheck/cam.txt"
+data_folder: "dataproxCheckSDF_s1_06"
+cam_param: "dataproxCheckSDF_s1_06/cam.txt"
+sdf_path: "dataproxCheckSDF_s1_06/vicon_sdf.pkl"
 use_joints_conf: true
 interpenetration: false
 is_seq: false # solve a video sequence
@@ -87,7 +88,16 @@ contact_loss_weights:
     - 0.0
     - 0.0
     - 0.0
+    # - 0.0
     - 1e4
+foot_contact_loss_weights:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 5e3
 expr_weights:
     - 1.0e2
     - 5.0e1
@@ -116,7 +126,7 @@ jaw_pose_prior_weights:
     - 47.8,478,478
     - 47.8,478,478
     - 47.8,478,478
-hand_joints_weights:
+hand_joints_weights: 
     - 0.0
     - 0.0
     - 0.0
@@ -132,6 +142,14 @@ face_joints_weights:
     - 2.0
     - 2.0
     - 2.0
+sdf_penetration_weights:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 10.0
+    - 5.0
 
 # optimization related
 rho: 100

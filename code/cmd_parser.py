@@ -232,6 +232,12 @@ def parse_config(argv=None):
     parser.add_argument('--use_contact', default=False,
                         type=lambda x: x.lower() in ['true', '1'],
                         help='Use contact loss to optim')
+    parser.add_argument('--use_sdf', default=False,
+                        type=lambda x: x.lower() in ['true', '1'],
+                        help='Use body-scene sdf loss to optim')
+    parser.add_argument('--sdf_path',
+                        default=os.getcwd(),
+                        help='The directory that contains the scene sdf.')
     parser.add_argument('--use_foot_contact', default=True,
                         type=lambda x: x.lower() in ['true', '1'],
                         help='Use contact loss to optim')
@@ -254,7 +260,10 @@ def parse_config(argv=None):
                         default=[0.0, 0.0, 0.0, 2.0], type=float,
                         nargs='*',
                         help='The weight for the foot contact floor term')
-
+    parser.add_argument('--sdf_penetration_weights',
+                        default=[0.0, 0.0, 0.0, 2.0], type=float,
+                        nargs='*',
+                        help='The weight for the scene sdf loss term')
     args = parser.parse_args()
     args_dict = vars(args)
     return args_dict

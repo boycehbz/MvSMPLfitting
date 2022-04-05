@@ -172,6 +172,38 @@ def init(**kwarg):
             use_right_hand=True,
             **rhand_args)
 
+    use_sdf = kwarg.get('use_sdf', True)
+    setting['use_sdf'] = use_sdf
+    setting['grid_min'] = None
+    setting['grid_max'] = None
+    setting['grid_dim'] = None
+    setting['voxel_size'] = None
+    setting['sdf'] = None
+    setting['sdf_normals'] = None
+    if use_sdf:
+        if use_cuda and torch.cuda.is_available():
+            device = torch.device('cuda')
+        else:
+            device = torch.device('cpu')
+        import pickle as pkl
+        sdf_path = kwarg.get('sdf_path', None)
+        with open(sdf_path,'rb') as file:
+            sdf_data = pkl.load(file)
+        grid_min = torch.tensor(np.array(sdf_data['min']), dtype=dtype, device=device)
+        grid_max = torch.tensor(np.array(sdf_data['max']), dtype=dtype, device=device)
+        grid_dim = sdf_data['dim']
+        voxel_size = (grid_max - grid_min) / grid_dim
+        sdf = torch.tensor(sdf_data['data'], dtype=dtype, device=device)
+        sdf_normals = None
+        if 'normal' in sdf_data:
+            sdf_normals = torch.tensor(sdf_data['normal'], dtype=dtype, device=device)
+        setting['grid_min'] = grid_min
+        setting['grid_max'] = grid_max
+        setting['grid_dim'] = grid_dim
+        setting['voxel_size'] = voxel_size
+        setting['sdf'] = sdf
+        setting['sdf_normals'] = sdf_normals
+
     if use_cuda and torch.cuda.is_available():
         device = torch.device('cuda')
 
@@ -249,4 +281,5 @@ def init(**kwarg):
     setting['global_init_type'] = kwarg.get('global_init_type','linear')
     setting['scene'] = kwarg.get('scene')
     setting['body_segments_dir'] = kwarg.get('body_segments_dir')
+
     return dataset_obj, setting

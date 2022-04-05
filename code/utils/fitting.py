@@ -32,7 +32,7 @@ import torch.nn as nn
 
 from utils import utils
 import cv2
-
+import torch.nn.functional as F
 
 @torch.no_grad()
 class FittingMonitor():
@@ -163,9 +163,13 @@ class FittingMonitor():
                 # self.mv.update_mesh(vertices.squeeze(),
                 #                     body_model.faces)
 
+            # if visflag:
+            #     for loss_name,loss_value in loss_list.items():
+            #         print(loss_name,':',loss_value)
+
             prev_loss = loss.item()
             print('stage fitting loss: ', prev_loss)
-        return prev_loss
+        return prev_loss#,loss_list
 
     def create_fitting_closure(self,
                                optimizer, body_model, camera=None,
@@ -225,7 +229,7 @@ class FittingMonitor():
             #     self.mv.update_mesh(vertices.squeeze(),
             #                         body_model.faces)
 
-            return total_loss
+            return total_loss#,loss_list
 
         return fitting_func
 
@@ -266,6 +270,14 @@ class SMPLifyLoss(nn.Module):
                  foot_contact_loss_weights=0.0,
                  reduction='sum',
                  use_3d=False,
+                 use_sdf=True,
+                 grid_min=0.0,
+                 grid_max=0.0,
+                 grid_dim=0.0,
+                 voxel_size=0.0,
+                 sdf=0.0,
+                 sdf_normals=0.0,
+                 sdf_penetration_weights=0.0,
                  body_model=None,
                  use_cuda=True,
                  **kwargs):
@@ -322,6 +334,14 @@ class SMPLifyLoss(nn.Module):
                 body_segments_dir=kwargs.get('body_segments_dir'),
                 use_cuda=use_cuda
             )
+        self.use_sdf = use_sdf
+        if self.use_sdf:
+            self.grid_min=grid_min
+            self.grid_max=grid_max
+            self.grid_dim=grid_dim
+            self.voxel_size=voxel_size
+            self.sdf=sdf
+            self.sdf_normals=sdf_normals
 
         self.register_buffer('data_weight',
                              torch.tensor(data_weight, dtype=dtype))
@@ -346,6 +366,9 @@ class SMPLifyLoss(nn.Module):
         if self.use_contact:
             self.register_buffer('contact_loss_weight',
                                  torch.tensor(contact_loss_weight, dtype=dtype))
+        if self.use_sdf:
+            self.register_buffer('sdf_penetration_weights',
+                                 torch.tensor(sdf_penetration_weights,dtype=dtype))
         if self.interpenetration:
             self.register_buffer('coll_loss_weight',
                                  torch.tensor(coll_loss_weight, dtype=dtype))
@@ -467,6 +490,31 @@ class SMPLifyLoss(nn.Module):
             contact_dist = self.contact_loss(body_model_output,body_model_faces)
             contact_loss = self.contact_loss_weight * contact_dist.mean()
 
+        sdf_penetration_loss = 0.0
+        if self.use_sdf and self.sdf_penetration_weights > 0.0:
+            vertices = body_model_output.vertices
+            nv = vertices.shape[1]
+            grid_dim = self.sdf.shape[0]
+            sdf_ids = torch.round(
+               (vertices.squeeze() - self.grid_min) / self.voxel_size).to(dtype=torch.long) ## 获取顶点在sdf场中的对应序号
+            sdf_ids.clamp_(min=0, max=grid_dim-1) ## 对超出sdf场的规则化
+
+            norm_vertices = (vertices - self.grid_min) / (self.grid_max - self.grid_min) * 2 - 1 ## 划分成的 -1 -1 -1 的方块，原点在中心
+            body_sdf = F.grid_sample(self.sdf.view(1, 1, grid_dim, grid_dim, grid_dim),
+                                     norm_vertices[:, :, [2, 1, 0]].view(1, nv, 1, 1, 3),
+                                     padding_mode='border')
+            if self.sdf_normals is not None:
+                sdf_normals = self.sdf_normals[sdf_ids[:,0], sdf_ids[:,1], sdf_ids[:,2]]
+            # if there are no penetrating vertices then set sdf_penetration_loss = 0
+            if body_sdf.lt(0).sum().item() < 1:
+                sdf_penetration_loss = torch.tensor(0.0, dtype=joint_loss.dtype, device=joint_loss.device)
+            else:
+                if self.sdf_normals is not None:
+                    sdf_penetration_loss = self.sdf_penetration_weights * (body_sdf[body_sdf < 0].unsqueeze(dim=-1).abs() * sdf_normals[body_sdf.view(-1) < 0, :]).pow(2).sum(dim=-1).sqrt().sum()
+                else:
+                    sdf_penetration_loss = self.sdf_penetration_weights * (body_sdf[body_sdf < 0].unsqueeze(dim=-1).abs()).pow(2).sum(dim=-1).sqrt().sum()
+
+
         pen_loss = 0.0
         # Calculate the loss due to interpenetration
         if (self.interpenetration and self.coll_loss_weight.item() > 0):
@@ -506,11 +554,26 @@ class SMPLifyLoss(nn.Module):
                 pen_loss += (self.coll_loss_weight * cur_loss.sum() / valid_people) ** 2
                 # print(pen_loss)
 
+        #print('contact_loss:',contact_loss,' sdf_loss:',sdf_penetration_loss)
+
+        # loss_list = {
+        #     'joint_loss':joint_loss.item(),
+        #     'pprior_loss':pprior_loss.item(),
+        #     'shape_loss':shape_loss.item(),
+        #     'angle_prior_loss':angle_prior_loss.item(),
+        #     'jaw_prior_loss':jaw_prior_loss.item(),
+        #     'expression_loss':expression_loss.item(),
+        #     'left_hand_prior_loss':left_hand_prior_loss.item(),
+        #     'right_hand_prior_loss':right_hand_prior_loss.item(),
+        #     'contact_loss':contact_loss.item() if torch.is_tensor(contact_loss) else contact_loss,
+        #     'sdf_penetration_loss':sdf_penetration_loss.item() if torch.is_tensor(sdf_penetration_loss) else sdf_penetration_loss
+        # }
+
         total_loss = (joint_loss + joints3d_loss + pprior_loss + shape_loss +
                       angle_prior_loss + pen_loss + 
                       jaw_prior_loss + expression_loss + left_hand_prior_loss + right_hand_prior_loss + 
-                      contact_loss + foot_contact_loss)
-        return total_loss
+                      contact_loss + sdf_penetration_loss)
+        return total_loss#, loss_list
 
 '''
 class SMPLifyLoss(nn.Module):

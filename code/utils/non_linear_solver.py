@@ -48,9 +48,11 @@ def non_linear_solver(
                     use_face=True,
                     use_hands=True,
                     use_contact=True,
+                    use_sdf=True,
                     use_foot_contact=True,
                     shape_weights=None,
                     contact_loss_weights=None,
+                    sdf_penetration_weights=None,
                     foot_contact_loss_weights=None,
                     coll_loss_weights=None,
                     use_joints_conf=False,
@@ -135,6 +137,8 @@ def non_linear_solver(
         opt_weights_dict['foot_contact_loss_weights'] = foot_contact_loss_weights
     if interpenetration:
         opt_weights_dict['coll_loss_weight'] = coll_loss_weights
+    if use_sdf:
+        opt_weights_dict['sdf_penetration_weights'] = sdf_penetration_weights
 
     # get weights for each stage
     keys = opt_weights_dict.keys()
@@ -170,6 +174,13 @@ def non_linear_solver(
                                body_model=model,
                                use_cuda=use_cuda,
                                use_contact=use_contact,
+                               use_sdf=use_sdf,
+                               grid_min=setting['grid_min'],
+                               grid_max=setting['grid_max'],
+                               grid_dim=setting['grid_dim'],
+                               voxel_size=setting['voxel_size'],
+                               sdf=setting['sdf'],
+                               sdf_normals=setting['sdf_normals'],
                                use_foot_contact=use_foot_contact,
                                **kwargs)
     loss = loss.to(device=device)
@@ -199,28 +210,11 @@ def non_linear_solver(
     opt_start = time.time()
 
     vis=None
-    visFlag=False
+    visFlag=True
     if visFlag:
         import open3d as o3d
         vis = o3d.visualization.Visualizer()
         vis.create_window()
-        body_pose = vposer.forward(
-                    pose_embedding).view(1,-1) if use_vposer else None
-        model_output = model(
-                    return_verts=True, body_pose=body_pose)
-                # vertices = model_output.vertices.detach()
-        mesh = o3d.geometry.TriangleMesh()
-        mesh.vertices = o3d.utility.Vector3dVector(
-                    model_output.vertices.detach().cpu().numpy()[0]
-                )
-        mesh.triangles = o3d.utility.Vector3iVector(
-                    model.faces
-                )
-        mesh.compute_vertex_normals()
-        sceneVis = o3d.io.read_triangle_mesh(kwargs.get('scene'))
-        sceneVis.compute_vertex_normals()
-        vis.add_geometry(mesh)
-        vis.add_geometry(sceneVis)
 
     for opt_idx, curr_weights in enumerate(tqdm(opt_weights, desc='Stage')):
         # pass stage1 and stage2 if it is a sequence
@@ -278,7 +272,8 @@ def non_linear_solver(
                 torch.cuda.synchronize()
             stage_start = time.time()
         # if curr_weights['contact_loss_weight'] < 1.0:
-        if opt_idx < 4:
+        if curr_weights['sdf_penetration_weights'] < 0.5:
+        # if opt_idx < 6:
             final_loss_val = monitor.run_fitting(
                 body_optimizer,
                 closure, final_params,
