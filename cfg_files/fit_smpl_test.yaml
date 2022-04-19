@@ -1,8 +1,7 @@
-
 # data related
-data_folder: "dataproxCheckSDF_s1_06"
-cam_param: "dataproxCheckSDF_s1_06/cam.txt"
-sdf_path: "dataproxCheckSDF_s1_06/vicon_sdf.pkl"
+data_folder: "dataGPA/0000_Camera00"
+cam_param: "dataGPA/0000_Camera00/camparams.txt"
+sdf_path: "dataGPA/0000_Camera00/sdf.pkl"
 use_joints_conf: true
 interpenetration: false
 is_seq: false # solve a video sequence
@@ -34,7 +33,7 @@ joints_to_ign:
 model_folder: 'models'
 model_type: 'smplx' # smpl smpllsp
 float_dtype: "float32"
-gender: male # male female neutral
+gender: neutral # male female neutral
 #use_hand: true
 #use_face: true
 
