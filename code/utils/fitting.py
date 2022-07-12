@@ -115,9 +115,9 @@ class FittingMonitor():
             if all([torch.abs(var.grad.view(-1).max()).item() < self.gtol
                     for var in params if var.grad is not None]):
                 break
-            
+
             if self.visualize and n % self.summary_steps == 0:
-            # if self.visualize and n % self.summary_steps == 0:
+                # if self.visualize and n % self.summary_steps == 0:
                 body_pose = vposer.decode(
                     pose_embedding, output_type='aa').view(
                         1, -1) if use_vposer else None
@@ -131,7 +131,8 @@ class FittingMonitor():
                     return_verts=True, body_pose=body_pose)
                 vertices = model_output.vertices.detach()
                 body_joints = model_output.joints.detach()
-                utils.visualize_fitting(body_joints, vertices, body_model.faces, camera, img_path, save=False)
+                utils.visualize_fitting(
+                    body_joints, vertices, body_model.faces, camera, img_path, save=False)
                 cv2.waitKey()
                 # self.mv.update_mesh(vertices.squeeze(),
                 #                     body_model.faces)
@@ -157,6 +158,7 @@ class FittingMonitor():
 
         # the vposer++ contains wrist
         append_wrists = False
+
         def fitting_func(backward=True):
             if backward:
                 optimizer.zero_grad()
@@ -175,7 +177,7 @@ class FittingMonitor():
                                            body_pose=body_pose,
                                            return_full_pose=return_full_pose)
             total_loss = loss(body_model_output, camera=camera,                         body_model=body_model,
-                             gt_joints=gt_joints,
+                              gt_joints=gt_joints,
                               body_model_faces=faces_tensor,
                               joints_conf=joints_conf,
                               gt_joints3d=gt_joints3d,
@@ -186,7 +188,8 @@ class FittingMonitor():
                               **kwargs)
 
             if backward:
-                total_loss.backward(retain_graph=True, create_graph=create_graph)
+                total_loss.backward(retain_graph=True,
+                                    create_graph=create_graph)
 
             # self.steps += 1
             # if self.visualize and self.steps % self.summary_steps == 0:
@@ -232,7 +235,7 @@ class SMPLifyLoss(nn.Module):
 
         self.use_joints_conf = use_joints_conf
         self.angle_prior = angle_prior
-        
+
         self.use_3d = use_3d
 
         self.robustifier = utils.GMoF(rho=rho)
@@ -294,13 +297,13 @@ class SMPLifyLoss(nn.Module):
         for cam in camera:
             projected_joints_ = cam(body_model_output.joints)
             projected_joints.append(projected_joints_)
-        
+
         weights = []
         for conf in joints_conf:
             # Calculate the weights for each joints
             weights_ = (joint_weights * conf
-                    if self.use_joints_conf else
-                    joint_weights).unsqueeze(dim=-1)
+                        if self.use_joints_conf else
+                        joint_weights).unsqueeze(dim=-1)
             weights.append(weights_)
 
         # Calculate the distance of the projected joints from
@@ -309,7 +312,7 @@ class SMPLifyLoss(nn.Module):
         for i in range(len(gt_joints)):
             joint_diff = self.robustifier(gt_joints[i] - projected_joints[i])
             joint_loss_ = (torch.sum(weights[i] ** 2 * joint_diff) *
-                        self.data_weight ** 2)
+                           self.data_weight ** 2)
             joint_loss += joint_loss_
 
         # 3d loss
@@ -318,7 +321,7 @@ class SMPLifyLoss(nn.Module):
             joints3d_conf = joints3d_conf.unsqueeze(dim=-1)
             diff3d = self.robustifier(gt_joints3d - body_model_output.joints)
             joints3d_loss = (torch.sum(joints3d_conf ** 2 * diff3d) *
-                        self.data_weight ** 2)
+                             self.data_weight ** 2)
 
         # Calculate the loss from the Pose prior
         if use_vposer:
@@ -330,7 +333,8 @@ class SMPLifyLoss(nn.Module):
                 body_model_output.betas)) * self.body_pose_weight ** 2
             if float(pprior_loss) > 5e4:
                 pprior_loss = 0.
-            pprior_loss += body_model_output.body_pose.pow(2).sum() * (self.body_pose_weight * 4) ** 2
+            pprior_loss += body_model_output.body_pose.pow(
+                2).sum() * (self.body_pose_weight * 4) ** 2
 
         shape_loss = 0.
         if not self.fix_shape:
@@ -351,7 +355,8 @@ class SMPLifyLoss(nn.Module):
             vertices = body_model_output.vertices
             boxes = self.get_bounding_boxes(vertices)
             boxes_center = boxes.mean(dim=1).unsqueeze(dim=1)
-            boxes_scale = (1+0.2) * 0.5*(boxes[:,1] - boxes[:,0]).max(dim=-1)[0][:,None,None]
+            boxes_scale = (
+                1+0.2) * 0.5*(boxes[:, 1] - boxes[:, 0]).max(dim=-1)[0][:, None, None]
 
             with torch.no_grad():
                 vertices_centered = vertices - boxes_center
@@ -359,7 +364,8 @@ class SMPLifyLoss(nn.Module):
                 assert(vertices_centered_scaled.min() >= -1)
                 assert(vertices_centered_scaled.max() <= 1)
                 assert(vertices.shape[0] == 1)
-                phi = self.sdf(body_model_faces.reshape(1, -1, 3).to(torch.int32), vertices_centered_scaled, grid_size=128)
+                phi = self.sdf(body_model_faces.reshape(
+                    1, -1, 3).to(torch.int32), vertices_centered_scaled, grid_size=128)
                 assert(phi.min() >= 0)
 
             valid_people = vertices.shape[0]
@@ -368,10 +374,12 @@ class SMPLifyLoss(nn.Module):
                 weights = torch.ones(valid_people, 1, device=vertices.device)
                 # weights[i,0] = 0.
                 # Change coordinate system to local coordinate system of each person
-                vertices_local = (vertices - boxes_center[i].unsqueeze(dim=0)) / boxes_scale[i].unsqueeze(dim=0)
-                vertices_grid = vertices_local.view(1,-1,1,1,3)
+                vertices_local = (
+                    vertices - boxes_center[i].unsqueeze(dim=0)) / boxes_scale[i].unsqueeze(dim=0)
+                vertices_grid = vertices_local.view(1, -1, 1, 1, 3)
                 # Sample from the phi grid
-                phi_val = nn.functional.grid_sample(phi[i][None, None], vertices_grid).view(valid_people, -1)
+                phi_val = nn.functional.grid_sample(
+                    phi[i][None, None], vertices_grid).view(valid_people, -1)
                 # ignore the phi values for the i-th shape
                 cur_loss = weights * phi_val
                 # if self.debugging:
@@ -381,7 +389,8 @@ class SMPLifyLoss(nn.Module):
                 #     frac = (cur_loss / self.robustifier) ** 2
                 #     cur_loss = frac / (frac + 1)
 
-                pen_loss += (self.coll_loss_weight * cur_loss.sum() / valid_people) ** 2
+                pen_loss += (self.coll_loss_weight *
+                             cur_loss.sum() / valid_people) ** 2
                 # print(pen_loss)
         # if (self.interpenetration and self.coll_loss_weight.item() > 0):
         #     batch_size = projected_joints.shape[0]
