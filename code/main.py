@@ -6,6 +6,7 @@
  @Email       : hbz@seu.edu.cn
  @Description : 
 '''
+from copy import deepcopy
 import sys
 import os
 
@@ -16,19 +17,24 @@ import torch
 import numpy as np
 from cmd_parser import parse_config
 from init import init
-from utils.init_guess import init_guess, load_init, fix_params, guess_init
+from utils.init_guess import init_guess, load_init, fix_params
 from utils.non_linear_solver import non_linear_solver
-from utils.utils import save_results
+from utils.utils import save_results, change
+import cv2
+keyps = []
+
 def main(**args):
+    global keyps
 
     dataset_obj, setting = init(**args)
 
     start = time.time()
 
     results = {}
-    s_last = None # the name of last sequence
-    setting['seq_start'] = False # indicate the first frame of the sequence
+    s_last = None  # the name of last sequence
+    setting['seq_start'] = False  # indicate the first frame of the sequence
     for idx, data in enumerate(dataset_obj):
+
         serial = data['serial']
         if serial != s_last:
             setting['seq_start'] = True
@@ -64,85 +70,35 @@ def main(**args):
         data['img'] = imgs
         data['img_path'] = img_paths
         data['keypoints'] = keyps
+        # print("keypoints: ", keypoints)
         print('Processing: {}'.format(data['img_path']))
 
+        if setting['adjustment']:
+            change(img_paths, keyps)
+
+        # init guess
         if setting['seq_start'] or not args.get('is_seq'):
-            init_guess(setting, data, use_torso=True, **args) ## 根据2djoints->3djoints 估计初始旋转和平移
+            init_guess(setting, data, use_torso=True, **args)  # 运行这个
         else:
             load_init(setting, data, results, use_torso=True, **args)
 
-        '''
-        smplify-x 非线性初始化
-        gt_joints = torch.tensor(data['keypoints'][0][:,:,:2]).to(device=setting['device'],dtype=setting['dtype'])
-        body_model = setting['model']
-        init_t = guess_init(
-            body_model,gt_joints,[[5,12],[2,9]],
-            use_vposer=args['use_vposer'], vposer=setting['vposer'],
-            pose_embedding=setting['pose_embedding'],
-            model_type=args['model_type'],
-            focal_length=setting['camera'][0].focal_length_x, dtype=setting['dtype'])
-        from utils import fitting
-        ## 补充非线性 全局变换优化
-        camera_loss = fitting.create_loss('camera_init',
-                                        trans_estimation=init_t,
-                                        init_joints_idxs=torch.tensor([9,12,2,5]).to(device=setting['device']),
-                                        depth_loss_weight=0.0,
-                                        camera_mode='fixed',
-                                        dtype=setting['dtype']).to(device=setting['device'])
-        camera_loss.trans_estimation[:] = init_t
-        monitor = fitting.FittingMonitor(batch_size=1, **args)
-        body_mean_pose = torch.zeros([1, 32],
-                                     dtype=setting['dtype'])
-        body_model.reset_params(body_pose=body_mean_pose, transl=init_t)
-        camera_opt_params = [body_model.transl, body_model.global_orient]
-        from optimizers import optim_factory
-        camera_optimizer, camera_create_graph = optim_factory.create_optimizer(
-            camera_opt_params,
-            **args)
-        fit_camera = monitor.create_fitting_closure(
-            camera_optimizer, body_model, setting['camera'][0], gt_joints,
-            camera_loss, create_graph=camera_create_graph,
-            use_vposer=args['use_vposer'], vposer=setting['vposer'],
-            pose_embedding=setting['pose_embedding'],
-            scan_tensor=None,
-            return_full_pose=False, return_verts=False)
-        cam_init_loss_val = monitor.run_fitting(camera_optimizer,
-                                                fit_camera,
-                                                camera_opt_params, body_model,
-                                                use_vposer=args['use_vposer'],
-                                                pose_embedding=setting['pose_embedding'],
-                                                vposer=setting['vposer'])
-        orient = body_model.global_orient.detach().cpu().numpy()
-        body_transl = body_model.transl.clone().detach()
-        from collections import defaultdict
-        new_params = defaultdict(transl=body_transl,
-                                     global_orient=orient,
-                                     body_pose=body_mean_pose)
-        body_model.reset_params(**new_params)
-        if args.get('use_vposer'):
-            with torch.no_grad():   
-                setting['pose_embedding'].fill_(0)
-        '''
+        fix_params(
+            setting, scale=setting['fixed_scale'], shape=setting['fixed_shape'])
 
-        fix_params(setting, scale=setting['fixed_scale'], shape=setting['fixed_shape']) ## 设置第一步初始化的全局旋转平移，选择是否优化scale和shape
-        # linear solve
         print("linear solve, to do...")
-        # non-linear solve
+
         results = non_linear_solver(setting, data, **args)
+
         # save results
         save_results(setting, data, results, **args)
-        
+
     elapsed = time.time() - start
     time_msg = time.strftime('%H hours, %M minutes, %S seconds',
                              time.gmtime(elapsed))
     print('Processing the data took: {}'.format(time_msg))
 
-def transProx2coco(js):
-    idx = [0,16,15,18,17,5,2,6,3,7,4,12,9,13,10,14,11]
-    return js[idx]
-
 if __name__ == "__main__":
 
-    sys.argv = ["", "--config=cfg_files/fit_smpl_test.yaml"]
+    sys.argv = ["", "--config=cfg_files/fit_smpl.yaml"]
     args = parse_config()
     main(**args)

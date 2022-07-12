@@ -1,10 +1,12 @@
 
 # data related
-data_folder: "dataprox"
-cam_param: "dataprox/cam.txt"
+data_folder: "data"
+cam_param: "data/3DOH50K_Parameters.txt"
+
 use_joints_conf: true
 interpenetration: false
 is_seq: false # solve a video sequence
+adjustment: true
 
 # output related
 output_folder: 'output'
@@ -25,9 +27,9 @@ dataset: 'offline'
 
 # model related
 model_folder: 'models'
-model_type: 'smpllsp' # smpl smpllsp
+model_type: 'smpl' # smpl smpllsp
 float_dtype: "float32"
-gender: neutral # male female neutral
+gender: male # male female neutral
 
 #prior related
 use_vposer: true
@@ -66,8 +68,8 @@ lr: 1.0
 maxiters: 30
 
 # fixed parameter
-fix_scale: true
-scale: 1
+fix_scale: false
+scale: 1000.
 fix_shape: false
 shape:
     - 2.39806 

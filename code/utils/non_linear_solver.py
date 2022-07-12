@@ -40,20 +40,7 @@ def non_linear_solver(
                     batch_size=1,
                     data_weights=None,
                     body_pose_prior_weights=None,
-                    hand_pose_prior_weights=None,
-                    jaw_pose_prior_weights=None,
-                    face_joints_weights=None,
-                    hand_joints_weights=None,
-                    expr_weights=None,
-                    use_face=True,
-                    use_hands=True,
-                    use_contact=True,
-                    use_sdf=True,
-                    use_foot_contact=True,
                     shape_weights=None,
-                    contact_loss_weights=None,
-                    sdf_penetration_weights=None,
-                    foot_contact_loss_weights=None,
                     coll_loss_weights=None,
                     use_joints_conf=False,
                     use_3d=False,
@@ -96,7 +83,7 @@ def non_linear_solver(
             conf = conf.to(device=device, dtype=dtype)
             joints_conf.append(conf)
 
-    if use_3d: ## 估计的3djoint只用于估计初始旋转和平移
+    if use_3d: #:
         joints3d = data['3d_joint'][0]
         joints_data = torch.tensor(joints3d, dtype=dtype)
         gt_joints3d = joints_data[:, :3]
@@ -117,28 +104,43 @@ def non_linear_solver(
     search_tree = None
     pen_distance = None
     filter_faces = None
+    # we do not use this term at this time
+    # if interpenetration:
+    #     from mesh_intersection.bvh_search_tree import BVH
+    #     import mesh_intersection.loss as collisions_loss
+    #     from mesh_intersection.filter_faces import FilterFaces
 
-    # Weights used for the pose prior and the shape prior ## 四轮约束吗？
+    #     assert use_cuda, 'Interpenetration term can only be used with CUDA'
+    #     assert torch.cuda.is_available(), \
+    #         'No CUDA Device! Interpenetration term can only be used' + \
+    #         ' with CUDA'
+
+    #     search_tree = BVH(max_collisions=max_collisions)
+
+    #     pen_distance = \
+    #         collisions_loss.DistanceFieldPenetrationLoss(
+    #             sigma=df_cone_height, point2plane=point2plane,
+    #             vectorized=True, penalize_outside=penalize_outside)
+
+        # if part_segm_fn:
+        #     # Read the part segmentation
+        #     part_segm_fn = os.path.expandvars(part_segm_fn)
+        #     with open(part_segm_fn, 'rb') as faces_parents_file:
+        #         face_segm_data = pickle.load(faces_parents_file,
+        #                                      encoding='latin1')
+        #     faces_segm = face_segm_data['segm']
+        #     faces_parents = face_segm_data['parents']
+        #     # Create the module used to filter invalid collision pairs
+        #     filter_faces = FilterFaces(
+        #         faces_segm=faces_segm, faces_parents=faces_parents,
+        #         ign_part_pairs=ign_part_pairs).to(device=device)
+
+    # Weights used for the pose prior and the shape prior
     opt_weights_dict = {'data_weight': data_weights,
                         'body_pose_weight': body_pose_prior_weights,
                         'shape_weight': shape_weights}
-    if use_face:
-        jaw_pose_prior_weights = map(lambda x: map(float, x.split(',')), jaw_pose_prior_weights)
-        jaw_pose_prior_weights = [list(w) for w in jaw_pose_prior_weights]
-        opt_weights_dict['face_weight'] = face_joints_weights
-        opt_weights_dict['expr_prior_weight'] = expr_weights
-        opt_weights_dict['jaw_prior_weight'] = jaw_pose_prior_weights
-    if use_hands:
-        opt_weights_dict['hand_weight'] = hand_joints_weights
-        opt_weights_dict['hand_prior_weight'] = hand_pose_prior_weights
-    if use_contact:
-        opt_weights_dict['contact_loss_weight'] = contact_loss_weights   
-    if use_foot_contact:
-        opt_weights_dict['foot_contact_loss_weights'] = foot_contact_loss_weights
     if interpenetration:
         opt_weights_dict['coll_loss_weight'] = coll_loss_weights
-    if use_sdf:
-        opt_weights_dict['sdf_penetration_weights'] = sdf_penetration_weights
 
     # get weights for each stage
     keys = opt_weights_dict.keys()
@@ -161,27 +163,12 @@ def non_linear_solver(
                                body_pose_prior=setting['body_pose_prior'],
                                shape_prior=setting['shape_prior'],
                                angle_prior=setting['angle_prior'],
-                               left_hand_prior=setting['left_hand_prior'],
-                               right_hand_prior=setting['left_hand_prior'],
-                               expr_prior=setting['expr_prior'],
-                               jaw_prior=setting['jaw_prior'],
                                interpenetration=interpenetration,
                                pen_distance=pen_distance,
                                search_tree=search_tree,
                                tri_filtering_module=filter_faces,
                                dtype=dtype,
                                use_3d=use_3d,
-                               body_model=model,
-                               use_cuda=use_cuda,
-                               use_contact=use_contact,
-                               use_sdf=use_sdf,
-                               grid_min=setting['grid_min'],
-                               grid_max=setting['grid_max'],
-                               grid_dim=setting['grid_dim'],
-                               voxel_size=setting['voxel_size'],
-                               sdf=setting['sdf'],
-                               sdf_normals=setting['sdf_normals'],
-                               use_foot_contact=use_foot_contact,
                                **kwargs)
     loss = loss.to(device=device)
 
@@ -209,12 +196,17 @@ def non_linear_solver(
     final_loss_val = 0
     opt_start = time.time()
 
-    vis=None
-    visFlag=False
-    if visFlag:
-        import open3d as o3d
-        vis = o3d.visualization.Visualizer()
-        vis.create_window()
+    # # initial value for non-linear solve
+    # new_params = defaultdict(global_orient=model.global_orient,
+    #                             # body_pose=body_mean_pose,
+    #                             transl=model.transl,
+    #                             scale=model.scale,
+    #                             betas=model.betas,
+    #                             )
+    # if vposer is not None:
+    #     with torch.no_grad():
+    #         pose_embedding.fill_(0)
+    # model.reset_params(**new_params)
 
     for opt_idx, curr_weights in enumerate(tqdm(opt_weights, desc='Stage')):
         # pass stage1 and stage2 if it is a sequence
@@ -224,20 +216,13 @@ def non_linear_solver(
             elif opt_idx == 2:
                 curr_weights['body_pose_weight'] *= 0.15
 
-        body_params = list(model.parameters()) # shape + t + r + s
-
-        # print("--------------------------------")
-        # for name,param in model.named_parameters():
-        #     print(name)
-        #     print(param.shape)
-        #     print(param.requires_grad)
-        #     print("---------------------------------")
+        body_params = list(model.parameters())
 
         final_params = list(
             filter(lambda x: x.requires_grad, body_params))
 
         if vposer is not None:
-            final_params.append(pose_embedding) # shape + t + r + s + vp
+            final_params.append(pose_embedding)
 
         body_optimizer, body_create_graph = optim_factory.create_optimizer(
             final_params,
@@ -247,12 +232,6 @@ def non_linear_solver(
         curr_weights['data_weight'] = data_weight
         curr_weights['bending_prior_weight'] = (
             3.17 * curr_weights['body_pose_weight'])
-        if use_hands:
-            joint_weights[:, 25:76] = curr_weights['hand_weight']
-        if use_face:
-            joint_weights[:, 76:] = curr_weights['face_weight']
-
-        
         loss.reset_loss_weights(curr_weights)
 
         closure = monitor.create_fitting_closure(
@@ -271,24 +250,12 @@ def non_linear_solver(
             if use_cuda and torch.cuda.is_available():
                 torch.cuda.synchronize()
             stage_start = time.time()
-        # if curr_weights['contact_loss_weight'] < 1.0:
-        if curr_weights['sdf_penetration_weights'] < 0.5:
-        # if opt_idx < 6:
-            final_loss_val = monitor.run_fitting(
-                body_optimizer,
-                closure, final_params,
-                model,
-                pose_embedding=pose_embedding, vposer=vposer, camera=camera, img_path=data['img_path'],
-                use_vposer=use_vposer,
-                visflag=False,scene=kwargs.get('scene'),viser=vis)
-        else:
-            final_loss_val = monitor.run_fitting(
-                body_optimizer,
-                closure, final_params,
-                model,
-                pose_embedding=pose_embedding, vposer=vposer, camera=camera, img_path=data['img_path'],
-                use_vposer=use_vposer,
-                visflag=visFlag,scene=kwargs.get('scene'),viser=vis)
+        final_loss_val = monitor.run_fitting(
+            body_optimizer,
+            closure, final_params,
+            model,
+            pose_embedding=pose_embedding, vposer=vposer, camera=camera, img_path=data['img_path'],
+            use_vposer=use_vposer)
 
         if interactive:
             if use_cuda and torch.cuda.is_available():
