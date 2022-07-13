@@ -97,6 +97,92 @@ def change(image_path, keyps):
         mouse_list = []
         cv2.destroyAllWindows()
 
+def result2mesh(result,setting,use_vposer=True):
+    vposer = setting['vposer']
+    model = setting['model']
+    if use_vposer:
+        pose_embedding = result['pose_embedding']
+        body_pose = vposer.decode(
+            pose_embedding, output_type='aa').view(1, -1) if use_vposer else None
+        if True:
+            body_pose[:, 18:24] = 0.
+            body_pose[:, 27:33] = 0.
+            body_pose[:, 57:] = 0.
+        orient = np.array(model.global_orient.detach().cpu().numpy())
+        temp_pose = body_pose.detach().cpu().numpy()
+        pose = np.hstack((orient, temp_pose))
+    else:
+        if True:
+            result['body_pose'][:, 18:24] = 0.
+            result['body_pose'][:, 27:33] = 0.
+            result['body_pose'][:, 57:] = 0.
+        pose = np.hstack((result['global_orient'], result['body_pose']))
+    model_output = model(
+        global_orient=torch.tensor(pose[:,:3],device=setting['device']), 
+        transl=torch.tensor(result['transl'],device=setting['device']),
+        return_verts=True, 
+        body_pose=torch.tensor(pose[:,3:],device=setting['device']), 
+        betas=torch.tensor(result['betas'],device=setting['device']))
+    body_joints = model_output.joints
+    verts = model_output.vertices
+    return verts, body_joints, model.faces
+
+def changeNew(image_path, keyps, results, setting):
+    global imgs, img_dir, mouse_list
+    verts, joints, faces = result2mesh(results,setting,setting['use_vposer'])
+    verts = verts.squeeze().detach().cpu().numpy()
+    for v in range(len(image_path)):
+        img_dir = image_path[v]
+        if sys.platform == 'linux':
+            view = img_dir.split('/')[-2]
+        else:
+            view = img_dir.split('\\')[-2]
+        global keypoints,keypoint
+
+        imgs = cv2.imread(img_dir)
+        ratiox = 800/int(imgs.shape[0])
+        ratioy = 800/int(imgs.shape[1])
+        if ratiox < ratioy:
+            ratio = ratiox
+        else:
+            ratio = ratioy
+        cv2.namedWindow(img_dir, 0)
+        cv2.resizeWindow(img_dir, int(
+            imgs.shape[1]*ratio), int(imgs.shape[0]*ratio))
+        cv2.setMouseCallback(img_dir, points_move)
+
+        render = Renderer((imgs.shape[1],imgs.shape[0]))
+        cam = setting['cameras'][v]
+        camIn = [
+                [cam.focal_length_x.detach().squeeze().cpu().numpy(),0,cam.center[0][0].detach().squeeze().cpu().numpy()],
+                [0,cam.focal_length_y.detach().squeeze().cpu().numpy(),cam.center[0][1].detach().squeeze().cpu().numpy()],
+                [0,0,1]]
+        imgs = render(verts,faces,cam.rotation.detach().cpu().squeeze().numpy(),cam.translation.detach().cpu().squeeze().numpy(),camIn,imgs,viz=False)
+        joints2D = cam(joints).detach().cpu().numpy().astype(np.int32)
+        for p in joints2D[0]:
+            imgs = cv2.circle(
+                imgs, (int(p[0]), int(p[1])), 3, (0, 0, 255), 10)
+        imgs = imgs.astype(np.uint8)
+
+        while True:
+            imgscopy = imgs.copy()
+            keypoints = keyps
+            keypoint = keypoints[v]
+            for p in keypoints[v][0]:
+                imgscopy = cv2.circle(imgscopy, (int(p[0]), int(p[1])), 3, (0, 255, 0), 10)
+            if draw_move == True:
+                imgscopy = cv2.circle(imgscopy, (int(ix), int(iy)), 3, (255, 0, 0), 10)
+
+            cv2.imshow(img_dir, imgscopy)
+            
+            for number in range(len(mouse_list)):
+                keypoints[v][0][points_index_list[number]
+                                ][0:2] = mouse_list[number]  # 保存移动后的点
+            key = cv2.waitKey(1)
+            if key == 27:
+                break
+        mouse_list = []
+        cv2.destroyAllWindows()
 
 def points_move(event, x, y, flags, param):
     global draw_begin, ix, iy, draw_move, points_index_list, mouse_list, keypoints, points_index, imgs, keypoint
@@ -415,8 +501,9 @@ def index_to(points_index):
         joints_index = -1
     return joints_index
 
-def keyboardCall(key):
+def keyboardCall(key, init_param=None):
     global status, keyAxis, shapeDim, gloablOrientAxis, gloablTranAxis, flag_change_value, num
+    global my_body_pose, my_transl, my_global_orient, my_betas
     betas_max_value = 10
     betas_min_value = -10
     pose_min_value = -0.5+original_pose
@@ -448,6 +535,12 @@ def keyboardCall(key):
                 gloablTranAxis %= 3
                 print("gloablTranAxis:",gloablTranAxis)
     
+    if key == ord("r"):
+        my_betas = init_param['betas'].clone()
+        my_global_orient = init_param['global_orient'].clone()
+        my_transl = init_param['transl'].clone()
+        my_body_pose = init_param['body_pose'].clone()
+
     if key == ord("a"):
         if(my_betas[0, shapeDim] >= betas_min_value):
             my_betas[0, shapeDim] = my_betas[0, shapeDim]-1
@@ -478,7 +571,7 @@ def keyboardCall(key):
             if(my_body_pose[0, 3*joints_index+keyAxis] <= pose_max_value[0, 3*joints_index+keyAxis]):
                 my_body_pose[0, 3*joints_index+keyAxis] = my_body_pose[0, 3*joints_index+keyAxis]+0.02
 
-def project_to_img(joints, verts, faces, gt_joints, camera, image_path, renderList, keyMain,viz=False, inter=False, path=None, points_to=None):
+def project_to_img(joints, verts, faces, gt_joints, camera, image_path, renderList, keyMain,viz=False, inter=False, path=None, points_to=None, init_param=None, test=False):
 
     global d2j, img, imagepath, vertices, keypoints
     imagepath = path
@@ -494,10 +587,14 @@ def project_to_img(joints, verts, faces, gt_joints, camera, image_path, renderLi
             visualize_results(d2j[v], verts,
                                 faces, gt_joints[v], image_path[v], camera[v], renderList[v], keyMain, save=False, path=None)
             cv2.setMouseCallback(name, click_event, np.array(d2j[v])[0])
-        keyboardCall(keyMain)
+        keyboardCall(keyMain, init_param=init_param)
     else:
-        for v in range(len(image_path)):
-            visualize_results(d2j[v], verts,faces, gt_joints[v], image_path[v], camera[v], renderList[v], keyMain, save=True, path=path)
+        if not test:
+            for v in range(len(image_path)):
+                visualize_results(d2j[v], verts,faces, gt_joints[v], image_path[v], camera[v], renderList[v], keyMain, save=True, path=path)
+        else:
+            for v in range(len(image_path)):
+                visualize_results(d2j[v], verts,faces, gt_joints[v], image_path[v], camera[v], renderList[v], keyMain, save=False, path=None)
 
 def visualize_fitting(joints, verts, faces, camera, image_path, save=False, path='./temp_vis'):
     global vis_count, a_index
@@ -559,7 +656,7 @@ def renderMultiview(keyMain, save=False):
         pass
     pass
 
-def visualize_results(d2j, vertices, faces, gt_joints, image_path, camera, renderList, keyMain, save=False, path=None):
+def visualize_results(d2jD, vertices, faces, gt_joints, image_path, camera, renderList, keyMain, save=False, path=None):
     global view, img, a_index, joints_index, gimg
 
     mesh = trimesh.Trimesh(vertices=vertices.detach().squeeze().cpu().numpy(),faces=faces)
@@ -590,21 +687,21 @@ def visualize_results(d2j, vertices, faces, gt_joints, image_path, camera, rende
         #     img = cv2.polylines(
         #         img, [point.astype(np.int32)], True, (color, color, color), 1)
         gimg[name] = img.copy()
-    
+
     count = 0
     if d2j_points_index != -1:
         a_index = d2j_points_index
-    for p in d2j[0]:
+    for p in d2jD[0]:
         if flag_change_value == True:
             if count == a_index:
                 joints_index = index_to(d2j_points_index)
-                cv2.circle(
-                    gimg[name], (int(p[0]), int(p[1])), 3, (255, 0, 0), 10)  # 红色
+                gimg[name] = cv2.circle(
+                    gimg[name], (int(p[0]), int(p[1])), 3, (255, 0, 0), 10)
             else:
-                cv2.circle(
+                gimg[name] = cv2.circle(
                     gimg[name], (int(p[0]), int(p[1])), 3, (0, 0, 255), 10)
         else:
-            cv2.circle(
+            gimg[name] = cv2.circle(
                 gimg[name], (int(p[0]), int(p[1])), 3, (0, 0, 255), 10)
         count = count+1
 
@@ -662,8 +759,6 @@ def save_results(setting, data, result,
         pose = np.hstack((orient, temp_pose))
         result['pose'] = pose
         result['pose_embedding'] = pose_embedding.detach().cpu().numpy()
-        print('orient: ', orient)
-        print("pose:", pose.shape)
     else:
         if True:
             result['body_pose'][:, 18:24] = 0.
@@ -711,17 +806,32 @@ def save_results(setting, data, result,
             body_joints, verts, model.faces, keypoints,
             camera, img_path, renderList, 1,viz=False, inter=setting['adjustment'], path=curr_image_fn, points_to=points_to)
 
+        init_param = {}
+        init_param = {
+            'global_orient':my_global_orient.clone(),
+            'transl':my_transl.clone(),
+            'body_pose':my_body_pose.clone(),
+            'betas':my_betas.clone(),
+        }
+
         while setting['adjustment']:  # 没按下退出键
             keyMain = cv2.waitKey(1)
+            # if keyMain != -1:
+            #     model_output = model(global_orient=my_global_orient, transl=my_transl,
+            #                         return_verts=True, body_pose=my_body_pose, betas=my_betas)  # ! 主要
+            #     body_joints = model_output.joints
+            #     verts = model_output.vertices
+            project_to_img(
+                body_joints, verts, model.faces, keypoints,
+                camera, img_path, renderList, keyMain,viz=False, inter=setting['adjustment'], path=curr_image_fn, points_to=points_to,init_param=init_param)
             if keyMain != -1:
                 model_output = model(global_orient=my_global_orient, transl=my_transl,
                                     return_verts=True, body_pose=my_body_pose, betas=my_betas)  # ! 主要
                 body_joints = model_output.joints
                 verts = model_output.vertices
-            project_to_img(
-                body_joints, verts, model.faces, keypoints,
-                camera, img_path, renderList, keyMain,viz=False, inter=setting['adjustment'], path=curr_image_fn, points_to=points_to)
-
+                project_to_img(
+                    body_joints, verts, model.faces, keypoints,
+                    camera, img_path, renderList, keyMain,viz=False, inter=False, path=curr_image_fn, points_to=points_to,init_param=init_param, test=True)
             if keyMain == 27:    # 退出
                 break
         cv2.destroyAllWindows()
@@ -770,7 +880,7 @@ def save_results(setting, data, result,
             project_to_img(
                 body_joints, verts, model.faces, keypoints,
                 camera, img_path, renderList, -1,viz=False, inter=False, path=curr_image_fn, points_to=points_to)
-       
+
         if save_meshes:
             curr_mesh_fn = osp.join(setting['mesh_folder'], serial, fn)
             if not osp.exists(curr_mesh_fn):

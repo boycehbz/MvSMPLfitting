@@ -201,4 +201,5 @@ def init(**kwarg):
     setting['pose_embedding'] = pose_embedding
     setting['batch_size'] = batch_size
     setting['adjustment'] = kwarg.pop("adjustment")
+    setting['use_vposer'] = kwarg.pop("use_vposer")
     return dataset_obj, setting
