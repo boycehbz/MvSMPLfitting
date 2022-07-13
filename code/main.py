@@ -73,8 +73,8 @@ def main(**args):
         # print("keypoints: ", keypoints)
         print('Processing: {}'.format(data['img_path']))
 
-        if setting['adjustment']:
-            change(img_paths, keyps)
+        # if setting['adjustment']:
+        #     change(img_paths, keyps)
 
         # init guess
         if setting['seq_start'] or not args.get('is_seq'):
