@@ -9,6 +9,7 @@ __pycache__/
 output/
 data/
 pretrain_model/
+models/smpl/*.pkl
 
 # Distribution / packaging
 .Python

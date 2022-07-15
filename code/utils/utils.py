@@ -439,7 +439,7 @@ class GMoF(nn.Module):
 
 
 def smpl_to_annotation(model_type='smplx', use_hands=False, use_face=False,
-                       use_face_contour=False, pose_format='coco17'):
+                       use_face_contour=False, pose_format='lsp14'):
 
     if pose_format == 'coco17':
         if model_type == 'smpl':

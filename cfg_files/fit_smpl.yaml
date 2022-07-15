@@ -6,7 +6,7 @@ cam_param: "data/3DOH50K_Parameters.txt"
 use_joints_conf: true
 interpenetration: false
 is_seq: false # solve a video sequence
-adjustment: true
+adjustment: false
 
 # output related
 output_folder: 'output'
@@ -27,9 +27,9 @@ dataset: 'offline'
 
 # model related
 model_folder: 'models'
-model_type: 'smpl' # smpl smpllsp
+model_type: 'smpllsp' # smpl smpllsp
 float_dtype: "float32"
-gender: male # male female neutral
+gender: neutral # male female neutral
 
 #prior related
 use_vposer: true
