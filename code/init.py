@@ -3,7 +3,7 @@
  @EditTime    : 2021-09-19 21:48:33
  @Author      : Buzhen Huang
  @Email       : hbz@seu.edu.cn
- @Description : 
+ @Description :
 '''
 
 import os
@@ -18,6 +18,7 @@ import smplx
 from camera import create_camera
 from prior import create_prior
 from utils.prior import load_vposer
+
 
 def init(**kwarg):
 
@@ -53,19 +54,21 @@ def init(**kwarg):
         print('CUDA is not available, exiting!')
         sys.exit(-1)
 
-    #read gender
+    # read gender
     input_gender = kwarg.pop('gender', 'neutral')
     model_type = kwarg.get('model_type')
     if model_type == 'smpllsp':
-        assert(input_gender=='neutral'), 'smpl-lsp model support neutral only'
-    gender_lbl_type = kwarg.pop('gender_lbl_type', 'none')
+        assert(input_gender == 'neutral'), 'smpl-lsp model support neutral only'
 
     if model_type == 'smpllsp':
         # the hip joint of smpl is different with 2D annotation predicted by openpose/alphapose, so we use smpl-lsp model to replace
-        pose_format = 'lsp14' 
+        pose_format = 'lsp14'
+    elif model_type == 'smplx':
+        pose_format = 'coco25'
     else:
-        pose_format = 'coco17'
+        pose_format = 'coco17'  # ! 使用COCO17
 
+    global dataset_obj
     dataset_obj = create_dataset(pose_format=pose_format, **kwarg)
 
     float_dtype = kwarg.get('float_dtype', 'float32')
@@ -90,7 +93,7 @@ def init(**kwarg):
                         create_jaw_pose=False,
                         create_leye_pose=False,
                         create_reye_pose=False,
-                        create_transl=True, #set transl in multi-view task  --Buzhen Huang 07/31/2019
+                        create_transl=True,  # set transl in multi-view task  --Buzhen Huang 07/31/2019
                         create_scale=True,
                         dtype=dtype,
                         **kwarg)
@@ -102,23 +105,22 @@ def init(**kwarg):
     extris, intris = load_camera_para(cam_params)
     trans, rot = get_rot_trans(extris, photoscan=False)
 
-
     # Create the camera object
     # create camera
     views = len(extris)
     camera = []
     for v in range(views):
         focal_length = float(intris[v][0][0])
-        rotate = torch.tensor(rot[v],dtype=dtype).unsqueeze(0)
-        translation = torch.tensor(trans[v],dtype=dtype).unsqueeze(0)
-        center = torch.tensor(intris[v][:2,2],dtype=dtype).unsqueeze(0)
+        rotate = torch.tensor(rot[v], dtype=dtype).unsqueeze(0)
+        translation = torch.tensor(trans[v], dtype=dtype).unsqueeze(0)
+        center = torch.tensor(intris[v][:2, 2], dtype=dtype).unsqueeze(0)
         camera_t = create_camera(focal_length_x=focal_length,
-                            focal_length_y=focal_length,
-                            translation=translation,
-                            rotation=rotate,
-                            center=center,
-                            dtype=dtype,
-                            **kwarg)
+                                 focal_length_y=focal_length,
+                                 translation=translation,
+                                 rotation=rotate,
+                                 center=center,
+                                 dtype=dtype,
+                                 **kwarg)
         camera.append(camera_t)
 
     # fix rotation and translation of camera
@@ -149,7 +151,7 @@ def init(**kwarg):
         shape_prior = shape_prior.to(device=device)
     else:
         device = torch.device('cpu')
-    
+
     # A weight for every joint of the model
     joint_weights = dataset_obj.get_joint_weights().to(device=device,
                                                        dtype=dtype)
@@ -198,5 +200,6 @@ def init(**kwarg):
     setting['mesh_folder'] = mesh_folder
     setting['pose_embedding'] = pose_embedding
     setting['batch_size'] = batch_size
+    setting['adjustment'] = kwarg.pop("adjustment")
+    setting['use_vposer'] = kwarg.pop("use_vposer")
     return dataset_obj, setting
-

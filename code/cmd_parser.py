@@ -12,6 +12,7 @@ import os
 
 import configargparse
 
+
 def parse_config(argv=None):
     arg_formatter = configargparse.ArgumentDefaultsHelpFormatter
 
@@ -21,7 +22,7 @@ def parse_config(argv=None):
                                       config_file_parser_class=cfg_parser,
                                       description=description,
                                       prog='MvSMPLfitting')
-    
+
     # basic
     parser.add_argument('-c', '--config',
                         required=True, is_config_file=True,
@@ -48,7 +49,8 @@ def parse_config(argv=None):
     parser.add_argument('--is_seq',
                         default=False,
                         type=lambda x: x.lower() in ['true', '1'],
-                        help='Init model using result of last frame')   
+                        help='Init model using result of last frame')
+
     # output related
     parser.add_argument('--output_folder',
                         default='output',
@@ -166,6 +168,8 @@ def parse_config(argv=None):
                         default=False,
                         help='Use 3D annotation for the computations')
 
+    parser.add_argument('--adjustment', default=False,
+                        type=lambda arg: arg.lower() in ['true', '1'])
 
     # parser.add_argument('--same_person',
     #                     type=lambda arg: arg.lower() == 'true',
@@ -175,7 +179,6 @@ def parse_config(argv=None):
     # parser.add_argument('--degrees', type=float, default=[0, 90, 180, 270],
     #                     help='Degrees of rotation for rendering the final' +
     #                     ' result')
-
 
     # parser.add_argument('--joints_to_ign', default=-1, type=int,
     #                     nargs='*',
@@ -187,10 +190,6 @@ def parse_config(argv=None):
     #                     help='The folder where the keypoints are stored')
     # parser.add_argument('--summary_folder', type=str, default='summaries',
     #                     help='Where to store the TensorBoard summaries')
-
-
-
-
 
     # parser.add_argument('--camera_type', type=str, default='persp',
     #                     choices=['persp'],
@@ -207,8 +206,6 @@ def parse_config(argv=None):
     # parser.add_argument('--optim_shape', default=True,
     #                     type=lambda x: x.lower() in ['true', '1'],
     #                     help='Optimize over the shape space')
-
-
 
     # parser.add_argument('--batch_size', type=int, default=1,
     #                     help='The size of the batch')
@@ -244,13 +241,12 @@ def parse_config(argv=None):
     #                     ' regularize the optimization of the pose of the' +
     #                     ' jaw.')
 
-
     # # Left/Right shoulder and hips
     # parser.add_argument('--init_joints_idxs', nargs='*', type=int,
     #                     # default=[9, 12, 2, 5],
     #                     default=[12, 11, 6, 5], #alphapose
     #                     help='Which joints to use for initializing the camera')
-    # parser.add_argument('--body_tri_idxs', 
+    # parser.add_argument('--body_tri_idxs',
     #                     # default='5.12,2.9',
     #                     default='5.11,6.12',
     #                     type=lambda x: [list(map(int, pair.split('.')))
@@ -259,12 +255,10 @@ def parse_config(argv=None):
     #                     ' the initial depth of the camera. The format' +
     #                     ' should be vIdx1.vIdx2,vIdx3.vIdx4')
 
-
     # parser.add_argument('--focal_length',
     #                     default=5000,
     #                     type=float,
     #                     help='Value of focal length.')
-
 
     # parser.add_argument('--penalize_outside',
     #                     default=False,
@@ -293,7 +287,6 @@ def parse_config(argv=None):
     #                     type=float, nargs='*',
     #                     help='The weights of the pose regularizer of the' +
     #                     ' hands')
-
 
     # parser.add_argument('--depth_loss_weight', default=1e2, type=float,
     #                     help='The weight for the regularizer for the' +
@@ -333,17 +326,15 @@ def parse_config(argv=None):
     #                     ' than this value, two initializations of SMPL fits' +
     #                     ' are tried.')
 
-
-
     # parser.add_argument('--use_3d',
     #                     default=False,
     #                     type=lambda x: x.lower() in ['true', '1'],
     #                     help='Use 3d joint ground-truth for fitting')
-       
+
     # parser.add_argument('--use_hip',
     #                     default=False,
     #                     type=lambda x: x.lower() in ['true', '1'],
-    #                     help='Use hip to supervise')  
+    #                     help='Use hip to supervise')
     args = parser.parse_args()
     args_dict = vars(args)
     return args_dict
