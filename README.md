@@ -15,6 +15,11 @@ Download the official SMPL model from [SMPLify website](http://smplify.is.tuebin
 
 Run ```python code/main.py --config cfg_files/fit_smpl.yaml```
 
+## Run on your data
+To apply our method to custom data, download the [trained models](https://pan.baidu.com/s/1k3sIlFQxpqNhgr5x0UHNMw?pwd=jx17) and run AlphaPose to obtain 2D keypoints in JSON format. The keypoints are saved in ```data/keypoints```
+
+```python code/keypoint_predict.py```
+
 ## Collision term
 We add a collision term based on [SDF](https://github.com/JiangWenPL/multiperson/tree/master/sdf). You need to install sdf and set ```interpenetration: true``` in the ```cfg_files/fit_smpl.yaml``` before using this code.
 ```

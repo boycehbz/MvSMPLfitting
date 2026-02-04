@@ -15,7 +15,7 @@ from init import init
 from utils.init_guess import init_guess, load_init, fix_params
 from utils.non_linear_solver import non_linear_solver
 from utils.utils import save_results, change
-os.environ["PYOPENGL_PLATFORM"] = "egl" #osmesa egl
+# os.environ["PYOPENGL_PLATFORM"] = "egl" #osmesa egl
 
 keyps = []
 
@@ -95,6 +95,6 @@ def main(**args):
 
 if __name__ == "__main__":
 
-    sys.argv = ["", "--config=cfg_files/fit_smpl.yaml"]
+    # sys.argv = ["", "--config=cfg_files/fit_smpl.yaml"]
     args = parse_config()
     main(**args)

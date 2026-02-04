@@ -48,5 +48,6 @@ for seq in seqs:
             result_img = alpha_predictor.visualize(img, pose, format='coco17', viz=viz)
             output_name = os.path.join('data/keypoints', seq, camera, name.split('.')[0] + '_keypoints.json')
             os.makedirs(os.path.dirname(output_name), exist_ok=True)
+            print('Save %s' %output_name)
             save_keypoints(pose, output_name)
             # cv2.imwrite(os.path.join('output/alphapose', name), result_img)
