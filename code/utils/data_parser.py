@@ -51,7 +51,7 @@ def read_keypoints(keypoint_fn, use_hands=True, use_face=True,
     for idx, person_data in enumerate(data['people']):
         body_keypoints = np.array(person_data['pose_keypoints_2d'],
                                   dtype=np.float32)
-        body_keypoints = body_keypoints.reshape([-1, 3])
+        body_keypoints = body_keypoints.reshape([-1, 3])[:17]
         if use_hands:
             left_hand_keyp = np.array(
                 person_data['hand_left_keypoints_2d'],

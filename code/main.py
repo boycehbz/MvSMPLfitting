@@ -3,24 +3,20 @@
  @FileName    : main.py
  @EditTime    : 2021-09-19 21:46:57
  @Author      : Buzhen Huang
- @Email       : hbz@seu.edu.cn
+ @Email       : buzhenhuang@outlook.com
  @Description : 
 '''
-from copy import deepcopy
 import sys
 import os
-
-import os.path as osp
-
 import time
-import torch
 import numpy as np
 from cmd_parser import parse_config
 from init import init
 from utils.init_guess import init_guess, load_init, fix_params
 from utils.non_linear_solver import non_linear_solver
 from utils.utils import save_results, change
-import cv2
+os.environ["PYOPENGL_PLATFORM"] = "egl" #osmesa egl
+
 keyps = []
 
 def main(**args):
@@ -99,6 +95,6 @@ def main(**args):
 
 if __name__ == "__main__":
 
-    # sys.argv = ["", "--config=cfg_files/fit_smpl.yaml"]
+    sys.argv = ["", "--config=cfg_files/fit_smpl.yaml"]
     args = parse_config()
     main(**args)

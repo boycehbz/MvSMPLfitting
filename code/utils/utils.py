@@ -686,7 +686,7 @@ def visualize_results(d2jD, vertices, faces, gt_joints, image_path, camera, rend
         #     point = img_v[0][f]
         #     img = cv2.polylines(
         #         img, [point.astype(np.int32)], True, (color, color, color), 1)
-        gimg[name] = img.copy()
+        gimg[name] = img.copy().astype(np.uint8)
 
     count = 0
     if d2j_points_index != -1:
