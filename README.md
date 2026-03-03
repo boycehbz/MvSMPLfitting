@@ -16,7 +16,7 @@ Download the official SMPL model from [SMPLify website](http://smplify.is.tuebin
 Run ```python code/main.py --config cfg_files/fit_smpl.yaml```
 
 ## Run on your data
-To apply our method to custom data, download the [trained models](https://pan.baidu.com/s/1k3sIlFQxpqNhgr5x0UHNMw?pwd=jx17) and run AlphaPose to obtain 2D keypoints in JSON format. The keypoints are saved in ```data/keypoints```
+To apply our method to custom data, download the trained models from [Baidu Netdisk](https://pan.baidu.com/s/1k3sIlFQxpqNhgr5x0UHNMw?pwd=jx17) or [Google Drive](https://drive.google.com/drive/folders/1qJluoov0BZpUlmrHUc5ss2RfHILN84SJ?usp=sharing) and run AlphaPose to obtain 2D keypoints in JSON format. The keypoints are saved in ```data/keypoints```
 
 ```python code/keypoint_predict.py```
 
